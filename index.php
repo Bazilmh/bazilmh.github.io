@@ -7,7 +7,7 @@
 <button onclick="getLocation()">Try It</button>
 
 <p id="demo"></p>
-
+<?php echo "hello"; ?>
 <script>
 var x = document.getElementById("demo");
 
