@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Infinite Ground – Havok Physics + Model Loader</title>
+    <style>
+        /* ─── Reset & Canvas ─── */
+        html,
+        body {
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a24;
+        }
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+            outline: none;
+            display: block;
+            cursor: default;
+        }
+
+        /* ─── UI Overlay (core HUD) ─── */
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #eee;
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 16px 22px;
+            border-radius: 10px;
+            pointer-events: none;
+            user-select: none;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(4px);
+            min-width: 280px;
+            z-index: 10;
+        }
+        #ui h3 {
+            margin: 0 0 8px 0;
+            font-weight: 400;
+            letter-spacing: 0.5px;
+            color: #b8d4e3;
+        }
+        #ui p {
+            margin: 4px 0;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        #ui span {
+            color: #f0c060;
+            font-weight: 600;
+        }
+        .key-hint {
+            font-size: 12px;
+            opacity: 0.6;
+            margin-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            padding-top: 8px;
+        }
+
+        /* ─── Pointer lock hint ─── */
+        #lock-hint {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.6);
+            font-family: sans-serif;
+            font-size: 16px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px 24px;
+            border-radius: 30px;
+            pointer-events: none;
+            user-select: none;
+            backdrop-filter: blur(2px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            transition: opacity 0.25s;
+            z-index: 10;
+        }
+        #lock-hint.hidden {
+            opacity: 0;
+        }
+
+        /* ─── Drive prompt ─── */
+        #drive-prompt {
+            position: absolute;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-family: sans-serif;
+            font-size: 22px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 12px 32px;
+            border-radius: 40px;
+            pointer-events: none;
+            user-select: none;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            z-index: 10;
+            display: none;
+            text-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        #drive-prompt .key {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 0 12px;
+            border-radius: 8px;
+            font-weight: bold;
+            color: #f0c060;
+        }
+
+        /* ─── Driving status ─── */
+        #driving-status {
+            position: absolute;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #7fdbff;
+            font-family: sans-serif;
+            font-size: 18px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 6px 24px;
+            border-radius: 30px;
+            pointer-events: none;
+            user-select: none;
+            backdrop-filter: blur(2px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 10;
+            display: none;
+        }
+    </style>
+
+    <!-- ─── Babylon.js Dependencies ─── -->
+    <script src="https://cdn.babylonjs.com/babylon.js">
+    </script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js">
+    </script>
+    <script src="https://cdn.babylonjs.com/havok/HavokPhysics_umd.js">
+    </script>
+</head>
+<body>
+
+    <!-- ─── UI Elements ─── -->
+    <div id="ui">
+        <h3>⬡ Infinite Ground · Havok Physics</h3>
+        <p>Position: <span id="posDisplay">X: 0 &nbsp; Y: 0 &nbsp; Z: 0</span></p>
+        <p>Active Tiles: <span id="tileDisplay">0</span></p>
+        <p style="font-size:12px; opacity:0.5;">Yaw: <span id="yawDisplay">0</span>° &nbsp; Pitch: <span id="pitchDisplay">0</span>°</p>
+        <div class="key-hint">
+            W/S &nbsp; Forward/Back &nbsp;·&nbsp; A/D &nbsp; Strafe &nbsp;·&nbsp; Q/E &nbsp; Height<br />
+            🖱️ Click canvas &amp; move mouse to look &nbsp;·&nbsp; <b>R</b> reload models<br />
+            ⚡ <span style="color:#f0c060;">Physics bodies:</span> <span id="physBodyCount">0</span><br />
+            🚗 <span style="color:#7fdbff;">Approach a vehicle & press <b>F</b> to drive</span>
+            <br />📷 Driving camera: <b>I/K</b> X &nbsp; <b>J/L</b> Y &nbsp; <b>U/O</b> Z &nbsp; <b>P</b> reset
+            <br />🎥 Camera angle: <b>←/→</b> yaw &nbsp; <b>↑/↓</b> pitch
+            <span id="driveCameraDisplay"></span>
+        </div>
+    </div>
+    <div id="lock-hint">🖱️ Click to lock mouse</div>
+    <div id="drive-prompt">Press <span class="key">F</span> to drive</div>
+    <div id="driving-status">🚗 Driving mode</div>
+
+    <canvas id="renderCanvas" tabindex="1"></canvas>
+
+    <!-- ─── Application Script ─── -->
+    <script>
+        /**
+         * =====================================================================
+         *  INFINITE GROUND – MODULAR ARCHITECTURE with DRIVING (fixed)
+         *  - Added robust null checks for driving target
+         *  - Fallback for DRIVE_OFFSET
+         * =====================================================================
+         */
+
+        (function() {
+            "use strict";
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  0.  GLOBAL DEBUG FLAG
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+            window.DEBUG = false;
+
+            function debugLog(...args) {
+                if (window.DEBUG) {
+                    console.log(...args);
+                }
+            }
+
+            function syncDebugVisibility() {
+                const debug = window.DEBUG;
+                if (state && state.loadedModelGroups) {
+                    state.loadedModelGroups.forEach(group => {
+                        if (group.debugProxy) {
+                            group.debugProxy.isVisible = debug;
+                            group.debugProxy.setEnabled(debug);
+                        }
+                    });
+                }
+            }
+            window.syncDebugVisibility = syncDebugVisibility;
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  1.  CONSTANTS & CONFIGURATION
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+            const CONFIG = {
+                TILE_SIZE: 1000,
+                VIEW_DISTANCE: 5000,
+                MOVE_SPEED: 50,
+                TILE_RADIUS: 0,
+                MOUSE_SENSITIVITY: 0.003,
+                TEXTURE_REPEAT_PER_UNIT: 0.8,
+                TEXTURE_URL: "assets/txts/desert_sand2.jpg",
+                horizonColor: new BABYLON.Color3(0.53, 0.78, 0.98),
+                GROUND_SIZE: 6000,
+                GROUND_DEPTH: 2,
+                FOG_START: 3500,
+                FOG_END: 5200,
+                INTERACT_DISTANCE: 30,
+                DRIVE_FORCE: 800,
+                DRIVE_OFFSET: new BABYLON.Vector3(0, -18, 8), // camera offset from object (local X/Y/Z)
+                DRIVE_CAMERA_STEP: 0.5,
+                DRIVE_CAMERA_ANGLE_STEP: 0.8,
+            };
+            CONFIG.TILE_RADIUS = Math.ceil(CONFIG.VIEW_DISTANCE / CONFIG.TILE_SIZE);
+
+            const MODELS_CONFIG = [{
+                file: "assets/objs/PLANE.glb",
+                position: [0, 0, 100],
+                scale: [1, 1, 1],
+                rotation: [Math.PI / 2, 0, 0],
+                shininess: 32,
+                mirror: 0.3,
+                alpha: 1.0,
+                interactable: true,
+                physics: {
+                    enabled: true,
+                    mass: 10,
+                    gravity: true,
+                    shape: "convexHull",
+                    sourceMesh: "737",
+                    centerOfMass: [0, 4, 0],
+                    friction: 0.6,
+                    restitution: 0.05
+                }
+            }, {
+                file: "assets/objs/bottle.glb",
+                position: [0, 0, 50],
+                scale: [1, 1, 1],
+                rotation: [Math.PI / 2, 0, 0],
+                shininess: 32,
+                mirror: 0.3,
+                alpha: 1.0,
+                interactable: false,
+                physics: {
+                    enabled: true,
+                    mass: 10,
+                    gravity: true,
+                    shape: "convexHull",
+                    friction: 0.6,
+                    restitution: 0.05
+                }
+            }];
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  2.  DOM REFS & GLOBAL STATE
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+            const canvas = document.getElementById("renderCanvas");
+            const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true });
+
+            const UI = {
+                posDisplay: document.getElementById("posDisplay"),
+                tileDisplay: document.getElementById("tileDisplay"),
+                yawDisplay: document.getElementById("yawDisplay"),
+                pitchDisplay: document.getElementById("pitchDisplay"),
+                physBodyCount: document.getElementById("physBodyCount"),
+                lockHint: document.getElementById("lock-hint"),
+                drivePrompt: document.getElementById("drive-prompt"),
+                drivingStatus: document.getElementById("driving-status"),
+                driveCameraDisplay: document.getElementById("driveCameraDisplay"),
+            };
+
+            const state = {
+                scene: null,
+                camera: null,
+                physicsPlugin: null,
+                havokInstance: null,
+                activeTiles: new Map(),
+                loadedModelGroups: [],
+                inputMap: {},
+                yaw: 0,
+                pitch: 0,
+                isLocked: false,
+                frameCount: 0,
+                isDriving: false,
+                drivingTarget: null,
+                cameraOrbitRadius: 20,
+                cameraOrbitHeight: 8,
+                driveCameraOffset: CONFIG.DRIVE_OFFSET.clone(),
+                driveCameraYaw: 0,
+                driveCameraPitch: 0,
+            };
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  3.  UTILITY FUNCTIONS (unchanged)
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+            function v3str(v, d = 2) {
+                return v ? `(${v.x.toFixed(d)}, ${v.y.toFixed(d)}, ${v.z.toFixed(d)})` : "null";
+            }
+
+            function logMatrix(label, matrix) {
+                if (!window.DEBUG) return;
+                const pos = new BABYLON.Vector3(),
+                    rot = new BABYLON.Quaternion(),
+                    scale = new BABYLON.Vector3();
+                matrix.decompose(scale, rot, pos);
+                const euler = rot.toEulerAngles();
+                debugLog(`   ${label}: pos=${v3str(pos)} rotEuler(deg)=${v3str(
+                    new BABYLON.Vector3(euler.x * 180 / Math.PI, euler.y * 180 / Math.PI, euler.z * 180 / Math.PI), 1
+                )} scale=${v3str(scale)}`);
+            }
+
+            function computeAggregateBBox(root) {
+                const meshes = root.getChildMeshes();
+                if (!meshes || meshes.length === 0) {
+                    return { size: new BABYLON.Vector3(1, 1, 1), center: new BABYLON.Vector3(0, 0, 0) };
+                }
+                let min = new BABYLON.Vector3(Infinity, Infinity, Infinity);
+                let max = new BABYLON.Vector3(-Infinity, -Infinity, -Infinity);
+                const rootInv = root.getWorldMatrix().clone().invert();
+                let anyValid = false;
+                meshes.forEach(mesh => {
+                    const bi = mesh.getBoundingInfo();
+                    if (!bi || !bi.boundingBox) return;
+                    const corners = bi.boundingBox.cornersWorld;
+                    if (!corners) return;
+                    corners.forEach(corner => {
+                        const local = BABYLON.Vector3.TransformCoordinates(corner, rootInv);
+                        min = BABYLON.Vector3.Minimize(min, local);
+                        max = BABYLON.Vector3.Maximize(max, local);
+                        anyValid = true;
+                    });
+                });
+                if (!anyValid) return { size: new BABYLON.Vector3(1, 1, 1), center: new BABYLON.Vector3(0, 0, 0) };
+                return { size: max.subtract(min), center: min.add(max).scale(0.5) };
+            }
+
+            function computeWorldBBoxMinMax(root) {
+                let min = new BABYLON.Vector3(Infinity, Infinity, Infinity);
+                let max = new BABYLON.Vector3(-Infinity, -Infinity, -Infinity);
+                let anyValid = false;
+                root.getChildMeshes().forEach(mesh => {
+                    const bi = mesh.getBoundingInfo();
+                    if (!bi || !bi.boundingBox) return;
+                    const corners = bi.boundingBox.cornersWorld;
+                    if (!corners) return;
+                    corners.forEach(corner => {
+                        min = BABYLON.Vector3.Minimize(min, corner);
+                        max = BABYLON.Vector3.Maximize(max, corner);
+                        anyValid = true;
+                    });
+                });
+                return anyValid ? { min, max } : null;
+            }
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  4.  SCENE SETUP (unchanged)
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+            function createBaseScene(engine) {
+                const scene = new BABYLON.Scene(engine);
+                const cfg = CONFIG;
+                scene.clearColor = cfg.horizonColor;
+                scene.fogMode = BABYLON.Scene.FOGMODE_LINEAR;
+                scene.fogColor = cfg.horizonColor;
+                scene.fogStart = cfg.FOG_START;
+                scene.fogEnd = cfg.FOG_END;
+                scene.ambientColor = new BABYLON.Color3(0.55, 0.55, 0.55);
+
+                const hemi = new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0, 0, 1), scene);
+                hemi.intensity = 1.2;
+                hemi.groundColor = new BABYLON.Color3(0.45, 0.48, 0.55);
+                const dirLight = new BABYLON.DirectionalLight("dirLight", new BABYLON.Vector3(-1.2, -0.8, -2.5), scene);
+                dirLight.intensity = 1.8;
+                const fillLight = new BABYLON.DirectionalLight("fillLight", new BABYLON.Vector3(0.6, 1.0, -1.8), scene);
+                fillLight.intensity = 0.95;
+
+                const skybox = BABYLON.MeshBuilder.CreateSphere("skyBox", {
+                    segments: 12,
+                    diameter: cfg.VIEW_DISTANCE * 2.0
+                }, scene);
+                const skyMat = new BABYLON.StandardMaterial("skyBoxMat", scene);
+                skyMat.backFaceCulling = false;
+                skyMat.emissiveColor = cfg.horizonColor.clone();
+                skyMat.disableLighting = true;
+                skybox.material = skyMat;
+                skybox.applyFog = false;
+
+                let envTexture = null;
+                try {
+                    envTexture = new BABYLON.CubeTexture("https://playground.babylonjs.com/textures/environment.dds",
+                    scene);
+                } catch (_) { /* ignore */ }
+
+                return { scene, envTexture };
+            }
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  5.  CAMERA & CONTROLS (unchanged)
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+            function setupCamera(scene, state) {
+                const camera = new BABYLON.FreeCamera("camera", new BABYLON.Vector3(0, -300, 80), scene);
+                camera.upVector = new BABYLON.Vector3(0, 0, 1);
+                const initialDir = new BABYLON.Vector3(0, 1, 0);
+                camera.target = camera.position.add(initialDir);
+
+                canvas.addEventListener("click", () => {
+                    if (!document.pointerLockElement) canvas.requestPointerLock();
+                });
+
+                document.addEventListener("pointerlockchange", () => {
+                    state.isLocked = (document.pointerLockElement === canvas);
+                    UI.lockHint.classList.toggle("hidden", state.isLocked);
+                    canvas.style.cursor = state.isLocked ? "none" : "default";
+                });
+
+                document.addEventListener("mousemove", (event) => {
+                    if (!state.isLocked) return;
+                    const deltaX = event.movementX || 0;
+                    const deltaY = event.movementY || 0;
+                    state.yaw -= deltaX * CONFIG.MOUSE_SENSITIVITY;
+                    state.pitch -= deltaY * CONFIG.MOUSE_SENSITIVITY;
+                    state.pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, state.pitch));
+                });
+
+                return camera;
+            }
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  6.  PHYSICS (unchanged)
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+            async function initPhysics(scene, state) {
+                try {
+                    const havokInstance = await HavokPhysics();
+                    state.havokInstance = havokInstance;
+                    const plugin = new BABYLON.HavokPlugin(true, havokInstance);
+                    scene.enablePhysics(new BABYLON.Vector3(0, 0, -9.8), plugin);
+                    state.physicsPlugin = plugin;
+                    debugLog("✅ Havok physics enabled (Z‑up, gravity = -9.8 Z)");
+                    return true;
+                } catch (e) {
+                    console.error("❌ Failed to load Havok physics:", e);
+                    return false;
+                }
+            }
+
+            function createStaticGround(scene, size, depth) {
+                const physEngine = scene.getPhysicsEngine();
+                if (!physEngine) {
+                    console.warn("Physics engine not ready – ground will not have physics.");
+                    return;
+                }
+                const groundMesh = BABYLON.MeshBuilder.CreateBox("phys_ground", {
+                    width: size,
+                    height: size,
+                    depth: depth
+                }, scene);
+                groundMesh.position.z = -1;
+                groundMesh.isVisible = false;
+                groundMesh.checkCollisions = false;
+                const groundMat = new BABYLON.StandardMaterial("groundMat", scene);
+                groundMat.wireframe = true;
+                groundMat.emissiveColor = new BABYLON.Color3(1, 0, 0);
+                groundMesh.material = groundMat;
+                const shape = new BABYLON.PhysicsShapeBox(
+                    BABYLON.Vector3.Zero(),
+                    BABYLON.Quaternion.Identity(),
+                    new BABYLON.Vector3(size, size, depth),
+                    scene
+                );
+                const body = new BABYLON.PhysicsBody(groundMesh, BABYLON.PhysicsMotionType.STATIC, false, scene);
+                body.shape = shape;
+                body.shape.material = { friction: 0.8, restitution: 0.05 };
+                debugLog("✅ Static ground created (mesh hidden).");
+            }
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  7.  TILE SYSTEM (unchanged)
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+            function createTileMesh(tx, ty, scene) {
+                const cfg = CONFIG;
+                const name = `tile_${tx}_${ty}`;
+                const tile = BABYLON.MeshBuilder.CreatePlane(name, { width: cfg.TILE_SIZE, height: cfg.TILE_SIZE }, scene);
+                tile.position.set(tx * cfg.TILE_SIZE, ty * cfg.TILE_SIZE, 0);
+                const mat = new BABYLON.StandardMaterial(`mat_${name}`, scene);
+                const tex = new BABYLON.Texture(cfg.TEXTURE_URL, scene);
+                tex.wrapU = tex.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE;
+                const s = cfg.TILE_SIZE * cfg.TEXTURE_REPEAT_PER_UNIT;
+                tex.uScale = tex.vScale = s;
+                tex.uOffset = tx * cfg.TILE_SIZE * cfg.TEXTURE_REPEAT_PER_UNIT;
+                tex.vOffset = ty * cfg.TILE_SIZE * cfg.TEXTURE_REPEAT_PER_UNIT;
+                mat.diffuseTexture = tex;
+                mat.diffuseColor = new BABYLON.Color3(0.95, 0.90, 0.82);
+                mat.specularColor = new BABYLON.Color3(0.12, 0.12, 0.10);
+                mat.specularPower = 24;
+                mat.emissiveColor = new BABYLON.Color3(0.08, 0.06, 0.04);
+                mat.backFaceCulling = false;
+                tex.onLoadError = () => {
+                    mat.diffuseColor = new BABYLON.Color3(0.85, 0.78, 0.65);
+                    mat.emissiveColor = new BABYLON.Color3(0.10, 0.08, 0.05);
+                };
+                tile.material = mat;
+                return tile;
+            }
+
+            function updateTiles(cameraPos, activeTiles, scene) {
+                const cfg = CONFIG;
+                const px = cameraPos.x,
+                    py = cameraPos.y;
+                const cx = Math.round(px / cfg.TILE_SIZE);
+                const cy = Math.round(py / cfg.TILE_SIZE);
+                const visible = new Set();
+                for (let dx = -cfg.TILE_RADIUS; dx <= cfg.TILE_RADIUS; dx++) {
+                    for (let dy = -cfg.TILE_RADIUS; dy <= cfg.TILE_RADIUS; dy++) {
+                        const tx = cx + dx,
+                            ty = cy + dy;
+                        const wx = tx * cfg.TILE_SIZE,
+                            wy = ty * cfg.TILE_SIZE;
+                        if (Math.hypot(px - wx, py - wy) <= cfg.VIEW_DISTANCE) {
+                            const key = `${tx},${ty}`;
+                            visible.add(key);
+                            if (!activeTiles.has(key)) {
+                                activeTiles.set(key, createTileMesh(tx, ty, scene));
+                            }
+                        }
+                    }
+                }
+                for (const [key, mesh] of activeTiles) {
+                    if (!visible.has(key)) {
+                        mesh.dispose(false, true);
+                        activeTiles.delete(key);
+                    }
+                }
+                UI.tileDisplay.innerText = activeTiles.size;
+            }
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  8.  MODEL LOADING & PHYSICS BODY CREATION (unchanged)
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+            function applyMaterialProperties(root, config, envTexture) {
+                root.getChildMeshes().forEach(mesh => {
+                    const mat = mesh.material;
+                    if (!mat) return;
+                    if (config.shininess !== undefined) {
+                        if (mat instanceof BABYLON.StandardMaterial) {
+                            mat.specularPower = config.shininess;
+                            mat.specularColor = new BABYLON.Color3(0.8, 0.8, 0.8);
+                        } else if (mat instanceof BABYLON.PBRMaterial) {
+                            mat.roughness = Math.max(0, 1 - config.shininess / 100);
+                        }
+                    }
+                    if (config.mirror !== undefined && envTexture) {
+                        const intensity = Math.min(1, Math.max(0, config.mirror));
+                        if (mat instanceof BABYLON.StandardMaterial) {
+                            mat.reflectionTexture = envTexture;
+                            mat.reflectionFresnelWeight = intensity;
+                            mat.specularColor = new BABYLON.Color3(0.8, 0.8, 0.8);
+                        } else if (mat instanceof BABYLON.PBRMaterial) {
+                            mat.environmentTexture = envTexture;
+                            mat.metallic = intensity;
+                            mat.roughness = 1 - intensity * 0.9;
+                        }
+                    } else if (config.mirror === 0) {
+                        if (mat instanceof BABYLON.StandardMaterial) mat.reflectionTexture = null;
+                        else if (mat instanceof BABYLON.PBRMaterial) mat.environmentTexture = null;
+                    }
+                    if (config.alpha !== undefined) {
+                        const alpha = Math.min(1, Math.max(0, config.alpha));
+                        mat.alpha = alpha;
+                        mat.transparencyMode = alpha < 1 ?
+                            BABYLON.Material.MATERIAL_ALPHABLEND :
+                            BABYLON.Material.MATERIAL_OPAQUE;
+                        if (alpha < 1) mat.backFaceCulling = false;
+                    }
+                });
+            }
+
+            function autoAlignModel(root, targetPos) {
+                const bbox = computeWorldBBoxMinMax(root);
+                if (!bbox) return;
+                const deltaZ = targetPos[2] - bbox.min.z;
+                const center = bbox.min.add(bbox.max).scale(0.5);
+                const deltaX = targetPos[0] - center.x;
+                const deltaY = targetPos[1] - center.y;
+                root.position.addInPlace(new BABYLON.Vector3(deltaX, deltaY, deltaZ));
+                root.computeWorldMatrix(true);
+            }
+
+            function alignModelToShapeCenter(root, shapeCenter) {
+                if (!Array.isArray(shapeCenter) || shapeCenter.length < 3) return;
+                const shapeCenterVec = new BABYLON.Vector3(shapeCenter[0], shapeCenter[1], shapeCenter[2]);
+                const bbox = computeWorldBBoxMinMax(root);
+                if (!bbox) return;
+                const currentWorldCenter = bbox.min.add(bbox.max).scale(0.5);
+                const desiredWorldCenter = BABYLON.Vector3.TransformCoordinates(shapeCenterVec, root.getWorldMatrix());
+                const shift = desiredWorldCenter.subtract(currentWorldCenter);
+                root.position.addInPlace(shift);
+                root.computeWorldMatrix(true);
+            }
+
+            function createModelPhysics(root, physCfg, scene, state, index) {
+                if (!physCfg.enabled || !state.physicsPlugin) {
+                    return { physicsBody: null, collisionProxy: null, debugProxy: null, centerOfMass: null };
+                }
+                const physEngine = scene.getPhysicsEngine();
+                if (!physEngine) {
+                    console.warn("Physics engine not ready – skipping physics for model", index);
+                    return { physicsBody: null, collisionProxy: null, debugProxy: null, centerOfMass: null };
+                }
+                try {
+                    const shapeType = physCfg.shape || "box";
+                    const mass = physCfg.mass !== undefined ? physCfg.mass : 1;
+                    const gravity = physCfg.gravity !== undefined ? physCfg.gravity : true;
+                    const friction = physCfg.friction !== undefined ? physCfg.friction : 0.5;
+                    const restitution = physCfg.restitution !== undefined ? physCfg.restitution : 0.1;
+                    const kinematic = physCfg.kinematic || false;
+                    const motionType = kinematic ?
+                        BABYLON.PhysicsMotionType.KINEMATIC :
+                        gravity ? BABYLON.PhysicsMotionType.DYNAMIC : BABYLON.PhysicsMotionType.KINEMATIC;
+
+                    let shapeSize, shapeCenter;
+                    const hasShapeSize = Array.isArray(physCfg.shapeSize) && physCfg.shapeSize.length >= 3;
+                    const hasShapeCenter = Array.isArray(physCfg.shapeCenter) && physCfg.shapeCenter.length >= 3;
+                    if (hasShapeSize && hasShapeCenter) {
+                        shapeSize = new BABYLON.Vector3(physCfg.shapeSize[0], physCfg.shapeSize[1], physCfg.shapeSize[2]);
+                        shapeCenter = new BABYLON.Vector3(physCfg.shapeCenter[0], physCfg.shapeCenter[1], physCfg.shapeCenter[
+                        2]);
+                    } else {
+                        const bbox = computeAggregateBBox(root);
+                        shapeSize = bbox.size;
+                        shapeCenter = bbox.center;
+                    }
+
+                    let centerOfMass = Array.isArray(physCfg.centerOfMass) && physCfg.centerOfMass.length >= 3 ?
+                        new BABYLON.Vector3(physCfg.centerOfMass[0], physCfg.centerOfMass[1], physCfg.centerOfMass[2]) :
+                        shapeCenter.clone();
+
+                    let shape = null;
+                    let collisionProxy = null;
+                    let debugProxy = null;
+                    const physicsMesh = root;
+
+                    switch (shapeType) {
+                        case "sphere": {
+                            const radius = Math.max(shapeSize.x, shapeSize.y, shapeSize.z) * 0.5;
+                            shape = new BABYLON.PhysicsShapeSphere(shapeCenter, radius, scene);
+                            break;
+                        }
+                        case "capsule": {
+                            const capRadius = Math.max(shapeSize.x, shapeSize.y) * 0.4;
+                            const capHeight = shapeSize.z;
+                            const halfSeg = Math.max(0, capHeight * 0.5 - capRadius);
+                            const pA = new BABYLON.Vector3(0, 0, -halfSeg).add(shapeCenter);
+                            const pB = new BABYLON.Vector3(0, 0, halfSeg).add(shapeCenter);
+                            shape = new BABYLON.PhysicsShapeCapsule(pA, pB, capRadius, scene);
+                            break;
+                        }
+                        case "convexHull": {
+                            const result = buildConvexHullShape(root, physCfg, scene, index);
+                            shape = result.shape;
+                            collisionProxy = result.collisionProxy;
+                            debugProxy = result.debugProxy;
+                            if (result.centerOfMass && !physCfg.centerOfMass) {
+                                centerOfMass = result.centerOfMass;
+                            }
+                            break;
+                        }
+                        case "box":
+                        default: {
+                            shape = new BABYLON.PhysicsShapeBox(shapeCenter, BABYLON.Quaternion.Identity(), shapeSize,
+                            scene);
+                            break;
+                        }
+                    }
+
+                    if (!shape) {
+                        console.warn(`No shape created for model ${index}, using box fallback.`);
+                        shape = new BABYLON.PhysicsShapeBox(shapeCenter, BABYLON.Quaternion.Identity(), shapeSize, scene);
+                    }
+
+                    const physicsBody = new BABYLON.PhysicsBody(physicsMesh, motionType, false, scene);
+                    physicsBody.shape = shape;
+                    physicsBody.shape.material = { friction, restitution };
+                    physicsBody.setMassProperties({ mass, centerOfMass });
+
+                    if (kinematic || !gravity) {
+                        physicsBody.setLinearVelocity(BABYLON.Vector3.Zero());
+                        physicsBody.setAngularVelocity(BABYLON.Vector3.Zero());
+                    }
+
+                    debugLog(`⚡ Physics body created for model ${index} (mass=${mass}, shape=${shapeType})`);
+                    return { physicsBody, collisionProxy, debugProxy, centerOfMass };
+
+                } catch (e) {
+                    console.error(`❌ Failed to create physics for model ${index}:`, e);
+                    return { physicsBody: null, collisionProxy: null, debugProxy: null, centerOfMass: null };
+                }
+            }
+
+            function buildConvexHullShape(root, physCfg, scene, index) {
+                const allDescendants = root.getChildMeshes();
+                const withGeometry = allDescendants.filter(m => {
+                    const p = m.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+                    return p && p.length > 0;
+                });
+                const nameFilter = (physCfg.sourceMesh || "").toLowerCase();
+
+                function subtreeMatches(mesh) {
+                    if (!nameFilter) return true;
+                    let n = mesh;
+                    while (n && n !== root) {
+                        if (n.name && n.name.toLowerCase().includes(nameFilter)) return true;
+                        n = n.parent;
+                    }
+                    return false;
+                }
+
+                let targetMeshes = nameFilter ? withGeometry.filter(subtreeMatches) : withGeometry;
+                if (nameFilter && targetMeshes.length === 0) {
+                    console.warn(`⚠️ Filter "${physCfg.sourceMesh}" matched nothing – using all geometry.`);
+                    targetMeshes = withGeometry;
+                }
+
+                let shape = null;
+                let collisionProxy = null;
+                let debugProxy = null;
+                let centerOfMass = null;
+
+                if (targetMeshes.length > 0) {
+                    const clones = targetMeshes.map((m, i) =>
+                        m.clone(`collision_part_${index}_${i}`, m.parent, true)
+                    );
+                    let merged = null;
+                    try {
+                        merged = BABYLON.Mesh.MergeMeshes(clones, true, true, undefined, false, true);
+                    } catch (mergeError) {
+                        console.warn(`⚠️ MergeMeshes threw; falling back to box.`, mergeError);
+                    }
+
+                    if (merged) {
+                        merged.computeWorldMatrix(true);
+                        const mergedWorldMatrix = merged.getWorldMatrix().clone();
+                        const rootWorldMatrix = root.getWorldMatrix().clone();
+                        const localToRoot = mergedWorldMatrix.multiply(rootWorldMatrix.invert());
+
+                        merged.bakeTransformIntoVertices(localToRoot);
+                        merged.parent = null;
+                        merged.position.set(0, 0, 0);
+                        merged.rotationQuaternion = BABYLON.Quaternion.Identity();
+                        merged.scaling.set(1, 1, 1);
+                        merged.isVisible = false;
+                        merged.computeWorldMatrix(true);
+
+                        if (!physCfg.centerOfMass) {
+                            const bbox = merged.getBoundingInfo().boundingBox;
+                            centerOfMass = bbox.center.clone();
+                        }
+
+                        collisionProxy = merged;
+
+                        debugProxy = merged.clone(`collision_wireframe_${index}`);
+                        debugProxy.parent = root;
+                        debugProxy.position.set(0, 0, 0);
+                        debugProxy.rotationQuaternion = BABYLON.Quaternion.Identity();
+                        debugProxy.scaling.set(1, 1, 1);
+                        const debugMat = new BABYLON.StandardMaterial(`debugShapeMat_${index}`, scene);
+                        debugMat.emissiveColor = new BABYLON.Color3(0, 1, 0);
+                        debugMat.wireframe = true;
+                        debugMat.disableLighting = true;
+                        debugMat.backFaceCulling = false;
+                        debugMat.zOffset = -2;
+                        debugProxy.material = debugMat;
+                        debugProxy.isVisible = window.DEBUG;
+                        debugProxy.setEnabled(window.DEBUG);
+                        debugProxy.alwaysSelectAsActiveMesh = true;
+                        debugProxy.isPickable = false;
+                        debugProxy.computeWorldMatrix(true);
+
+                        try {
+                            shape = new BABYLON.PhysicsShapeConvexHull(merged, scene);
+                            debugLog(`✅ PhysicsShapeConvexHull created.`);
+                        } catch (hullError) {
+                            console.warn(`⚠️ Convex hull failed; falling back to box.`, hullError);
+                            const bbox = computeAggregateBBox(root);
+                            const size = bbox.size;
+                            const center = bbox.center;
+                            shape = new BABYLON.PhysicsShapeBox(center, BABYLON.Quaternion.Identity(), size, scene);
+                        }
+                    }
+                }
+
+                if (!shape) {
+                    const bbox = computeAggregateBBox(root);
+                    shape = new BABYLON.PhysicsShapeBox(bbox.center, BABYLON.Quaternion.Identity(), bbox.size, scene);
+                }
+
+                return { shape, collisionProxy, debugProxy, centerOfMass };
+            }
+
+            async function loadSingleModel(cfg, index, scene, state, envTexture) {
+                const fullPath = cfg.file;
+                const lastSlash = fullPath.lastIndexOf('/');
+                const rootUrl = lastSlash !== -1 ? fullPath.substring(0, lastSlash + 1) : "";
+                const filename = lastSlash !== -1 ? fullPath.substring(lastSlash + 1) : fullPath;
+
+                debugLog(`📦 Loading ${filename} ...`);
+                const result = await BABYLON.SceneLoader.ImportMeshAsync("", rootUrl, filename, scene);
+                const { meshes, transformNodes, animationGroups } = result;
+
+                const pos = cfg.position || [0, 0, 0];
+                const rot = cfg.rotation || [0, 0, 0];
+                const scale = cfg.scale || [1, 1, 1];
+                const root = BABYLON.MeshBuilder.CreateBox(`model_root_${index}`, { width: 0.001, height: 0.001,
+                    depth: 0.001 }, scene);
+                root.position.set(pos[0], pos[1], pos[2]);
+                root.rotationQuaternion = BABYLON.Quaternion.FromEulerAngles(rot[0], rot[1], rot[2]);
+                root.scaling.set(scale[0], scale[1], scale[2]);
+                root.isVisible = false;
+
+                const allNodes = [...meshes, ...transformNodes];
+                const topLevelNodes = allNodes.filter(n => !n.parent || n.parent === scene);
+                topLevelNodes.forEach(n => { n.parent = root; });
+                root.computeWorldMatrix(true);
+                root.getChildMeshes().forEach(m => m.computeWorldMatrix(true));
+
+                applyMaterialProperties(root, cfg, envTexture);
+
+                const physCfg = cfg.physics || { enabled: false };
+                if (Array.isArray(physCfg.shapeCenter) && physCfg.shapeCenter.length >= 3) {
+                    alignModelToShapeCenter(root, physCfg.shapeCenter);
+                } else if (!physCfg.shapeSize) {
+                    autoAlignModel(root, pos);
+                }
+
+                const physResult = createModelPhysics(root, physCfg, scene, state, index);
+
+                let animGroups = [];
+                if (animationGroups && animationGroups.length > 0) {
+                    const speed = cfg.speed || 1.0;
+                    animationGroups.forEach(ag => {
+                        ag.speedRatio = speed;
+                        if (cfg.loopAnim !== false) ag.loopAnimation = true;
+                        ag.play(true);
+                        animGroups.push(ag);
+                    });
+                }
+
+                return {
+                    root,
+                    collisionProxy: physResult.collisionProxy,
+                    debugProxy: physResult.debugProxy,
+                    physicsBody: physResult.physicsBody,
+                    animationGroups: animGroups,
+                    config: cfg,
+                    interactable: cfg.interactable || false,
+                };
+            }
+
+            async function reloadModels(scene, state, envTexture) {
+                debugLog("🔄 Reloading models...");
+                state.loadedModelGroups.forEach(g => {
+                    if (g.physicsBody) g.physicsBody.dispose();
+                    if (g.debugProxy) g.debugProxy.dispose(false, true);
+                    if (g.collisionProxy) g.collisionProxy.dispose(false, true);
+                    if (g.root) g.root.dispose(false, true);
+                    if (g.animationGroups) g.animationGroups.forEach(ag => ag.dispose());
+                });
+                state.loadedModelGroups = [];
+
+                if (!MODELS_CONFIG || MODELS_CONFIG.length === 0) {
+                    UI.physBodyCount.innerText = "0";
+                    return;
+                }
+
+                let physCounter = 0;
+                for (let i = 0; i < MODELS_CONFIG.length; i++) {
+                    try {
+                        const group = await loadSingleModel(MODELS_CONFIG[i], i, scene, state, envTexture);
+                        state.loadedModelGroups.push(group);
+                        if (group.physicsBody) physCounter++;
+                    } catch (err) {
+                        console.error(`❌ Failed to load model "${MODELS_CONFIG[i].file}":`, err);
+                    }
+                }
+                UI.physBodyCount.innerText = physCounter;
+                syncDebugVisibility();
+            }
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  9.  DRIVING SYSTEM (fixed with null checks)
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+            function updateDriving(scene, state, dt) {
+                const camera = state.camera;
+                const input = state.inputMap;
+
+                // 1. Find nearest interactable model
+                let nearestGroup = null;
+                let nearestDist = Infinity;
+                const threshold = CONFIG.INTERACT_DISTANCE;
+
+                for (const group of state.loadedModelGroups) {
+                    if (!group.interactable) continue;
+                    if (!group.root) continue; // safety
+                    const rootPos = group.root.position;
+                    const dist = BABYLON.Vector3.Distance(camera.position, rootPos);
+                    if (dist < threshold && dist < nearestDist) {
+                        nearestDist = dist;
+                        nearestGroup = group;
+                    }
+                }
+
+                // 2. Show/hide prompt
+                if (!state.isDriving && nearestGroup) {
+                    UI.drivePrompt.style.display = "block";
+                } else {
+                    UI.drivePrompt.style.display = "none";
+                }
+
+                // 3. Toggle driving on 'F' key
+                if (input["KeyF"] && !state._fKeyProcessed) {
+                    state._fKeyProcessed = true;
+                    if (!state.isDriving && nearestGroup) {
+                        // Enter driving mode – ensure the target is fully valid
+                        if (nearestGroup.root && nearestGroup.physicsBody) {
+                            state.isDriving = true;
+                            state.drivingTarget = nearestGroup;
+                            UI.drivingStatus.style.display = "block";
+                            UI.drivePrompt.style.display = "none";
+                            debugLog("🚗 Entered driving mode for", nearestGroup.config.file);
+                        } else {
+                            console.warn("Cannot drive: missing root or physicsBody");
+                        }
+                    } else if (state.isDriving) {
+                        // Exit driving mode
+                        state.isDriving = false;
+                        state.drivingTarget = null;
+                        UI.drivingStatus.style.display = "none";
+                        debugLog("🚗 Exited driving mode");
+                    }
+                }
+                if (!input["KeyF"]) {
+                    state._fKeyProcessed = false;
+                }
+
+                // 4. If driving, update camera and apply force
+                if (state.isDriving && state.drivingTarget) {
+                    const target = state.drivingTarget;
+                    // Extra safety: validate target
+                    if (!target.root || !target.physicsBody) {
+                        // Invalid target, exit driving
+                        state.isDriving = false;
+                        state.drivingTarget = null;
+                        UI.drivingStatus.style.display = "none";
+                        console.warn("Driving target invalid – exiting");
+                        return;
+                    }
+                    const root = target.root;
+                    const phys = target.physicsBody;
+
+                    // --- Driving camera XYZ controls ---
+                    const forward = new BABYLON.Vector3(0, 1, 0);
+                    const worldForward = BABYLON.Vector3.TransformNormal(forward, root.getWorldMatrix());
+                    worldForward.normalize();
+
+                    const offset = state.driveCameraOffset;
+                    const step = CONFIG.DRIVE_CAMERA_STEP * dt;
+                    if (input["KeyI"]) offset.x += step;
+                    if (input["KeyK"]) offset.x -= step;
+                    if (input["KeyJ"]) offset.y += step;
+                    if (input["KeyL"]) offset.y -= step;
+                    if (input["KeyU"]) offset.z += step;
+                    if (input["KeyO"]) offset.z -= step;
+                    const angleStep = CONFIG.DRIVE_CAMERA_ANGLE_STEP * dt;
+                    if (input["ArrowLeft"]) state.driveCameraYaw -= angleStep;
+                    if (input["ArrowRight"]) state.driveCameraYaw += angleStep;
+                    if (input["ArrowUp"]) state.driveCameraPitch += angleStep;
+                    if (input["ArrowDown"]) state.driveCameraPitch -= angleStep;
+                    state.driveCameraPitch = Math.max(-Math.PI / 2 + 0.05,
+                        Math.min(Math.PI / 2 - 0.05, state.driveCameraPitch));
+                    if (input["KeyP"]) {
+                        offset.copyFrom(CONFIG.DRIVE_OFFSET);
+                        state.driveCameraYaw = 0;
+                        state.driveCameraPitch = 0;
+                    }
+
+                    const worldOffset = BABYLON.Vector3.TransformNormal(offset, root.getWorldMatrix());
+                    const localAim = new BABYLON.Vector3(
+                        Math.sin(state.driveCameraYaw) * Math.cos(state.driveCameraPitch),
+                        Math.cos(state.driveCameraYaw) * Math.cos(state.driveCameraPitch),
+                        Math.sin(state.driveCameraPitch)
+                    );
+                    const vehicleRotation = root.rotationQuaternion || BABYLON.Quaternion.Identity();
+                    const vehicleRotationMatrix = BABYLON.Matrix.Identity();
+                    vehicleRotation.toRotationMatrix(vehicleRotationMatrix);
+                    const worldAim = BABYLON.Vector3.TransformNormal(localAim, vehicleRotationMatrix);
+                    worldAim.normalize();
+                    const targetPos = root.position.clone().add(worldOffset);
+                    camera.position.copyFrom(targetPos);
+                    camera.setTarget(root.position.add(worldAim.scale(20)));
+                    UI.driveCameraDisplay.innerText =
+                        `  (X ${offset.x.toFixed(1)}, Y ${offset.y.toFixed(1)}, Z ${offset.z.toFixed(1)}` +
+                        ` | Yaw ${(state.driveCameraYaw * 180 / Math.PI).toFixed(0)}°, Pitch ${(state.driveCameraPitch * 180 / Math.PI).toFixed(0)}°)`;
+
+                    // --- Apply force when W pressed ---
+                    if (input["KeyW"]) {
+                        const forceMag = CONFIG.DRIVE_FORCE;
+                        const force = worldForward.scale(forceMag);
+                        // Apply at center of mass (root position)
+                        phys.applyForce(force, root.position);
+                        debugLog("Applying force", force);
+                    }
+                }
+            }
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  10. RENDER LOOP (updated)
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+            function runRenderLoop(engine, scene, state) {
+                engine.runRenderLoop(() => {
+                    const dt = engine.getDeltaTime() / 1000;
+                    const speed = CONFIG.MOVE_SPEED * dt;
+
+                    const camera = state.camera;
+                    const input = state.inputMap;
+
+                    // --- If not driving, handle normal free movement ---
+                    if (!state.isDriving) {
+                        const forward = new BABYLON.Vector3(
+                            Math.sin(state.yaw) * Math.cos(state.pitch),
+                            Math.cos(state.yaw) * Math.cos(state.pitch),
+                            Math.sin(state.pitch)
+                        ).normalize();
+                        camera.target = camera.position.add(forward);
+
+                        let hFwd = new BABYLON.Vector3(forward.x, forward.y, 0);
+                        if (hFwd.lengthSquared() > 0.0001) hFwd.normalize();
+                        else hFwd = new BABYLON.Vector3(0, 1, 0);
+                        const up = new BABYLON.Vector3(0, 0, 1);
+                        const right = BABYLON.Vector3.Cross(hFwd, up).normalize();
+
+                        let moveVec = new BABYLON.Vector3(0, 0, 0);
+                        if (input["KeyW"]) moveVec.addInPlace(hFwd);
+                        if (input["KeyS"]) moveVec.addInPlace(hFwd.scale(-1));
+                        if (input["KeyA"]) moveVec.addInPlace(right.scale(-1));
+                        if (input["KeyD"]) moveVec.addInPlace(right);
+                        if (input["KeyE"]) moveVec.addInPlace(up);
+                        if (input["KeyQ"]) moveVec.addInPlace(up.scale(-1));
+                        if (moveVec.lengthSquared() > 0) {
+                            moveVec.normalize().scaleInPlace(speed);
+                            camera.position.addInPlace(moveVec);
+                        }
+                    }
+
+                    // --- Driving update (proximity, prompt, camera, force) ---
+                    updateDriving(scene, state, dt);
+
+                    // --- Skybox follows camera ---
+                    const skybox = scene.getMeshByName("skyBox");
+                    if (skybox) skybox.position.copyFrom(camera.position);
+
+                    // --- Tiles ---
+                    updateTiles(camera.position, state.activeTiles, scene);
+
+                    // --- UI (general) ---
+                    state.frameCount++;
+                    if (state.frameCount % 10 === 0) {
+                        UI.posDisplay.innerText =
+                            `X: ${camera.position.x.toFixed(0)}  Y: ${camera.position.y.toFixed(0)}  Z: ${camera.position.z.toFixed(0)}`;
+                        UI.yawDisplay.innerText = (state.yaw * 180 / Math.PI).toFixed(1);
+                        UI.pitchDisplay.innerText = (state.pitch * 180 / Math.PI).toFixed(1);
+                    }
+
+                    scene.render();
+                });
+            }
+
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            //  11. APPLICATION INITIALIZATION
+            // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+            async function bootstrap() {
+                const { scene, envTexture } = createBaseScene(engine);
+                state.scene = scene;
+
+                state.camera = setupCamera(scene, state);
+                state.camera.position = new BABYLON.Vector3(0, -300, 80);
+
+                const physicsOk = await initPhysics(scene, state);
+                if (physicsOk) {
+                    createStaticGround(scene, CONFIG.GROUND_SIZE, CONFIG.GROUND_DEPTH);
+                }
+
+                window.addEventListener("keydown", (e) => { state.inputMap[e.code] = true; });
+                window.addEventListener("keyup", (e) => { state.inputMap[e.code] = false; });
+                window.addEventListener("DOMContentLoaded", () => canvas.focus());
+                canvas.addEventListener("click", () => canvas.focus());
+
+                window.addEventListener("keydown", (e) => {
+                    if (e.code === "KeyR" && !e.ctrlKey && !e.metaKey) {
+                        e.preventDefault();
+                        reloadModels(scene, state, envTexture);
+                    }
+                });
+
+                syncDebugVisibility();
+                await reloadModels(scene, state, envTexture);
+                runRenderLoop(engine, scene, state);
+                window.addEventListener("resize", () => engine.resize());
+
+                console.log("%c Infinite Ground – Modular Architecture with Driving (fixed)", "font-size:20px; font-weight:bold;");
+                console.log("🚗 Approach an interactable model and press F to drive.");
+                console.log("🔍 Set window.DEBUG = true for wireframes & logs.");
+            }
+
+            bootstrap().catch(err => console.error("❌ Bootstrap failed:", err));
+
+        })();
+    </script>
+</body>
+</html>

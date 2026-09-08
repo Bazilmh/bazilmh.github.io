@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Infinite Ground – Model Loader (OBJ + textures)</title>
+    <style>
+        /* (styles unchanged from previous version) */
+        html,
+        body {
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a24;
+        }
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+            outline: none;
+            display: block;
+            cursor: default;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #eee;
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 16px 22px;
+            border-radius: 10px;
+            pointer-events: none;
+            user-select: none;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(4px);
+            min-width: 280px;
+            z-index: 10;
+        }
+        #ui h3 {
+            margin: 0 0 8px 0;
+            font-weight: 400;
+            letter-spacing: 0.5px;
+            color: #b8d4e3;
+        }
+        #ui p {
+            margin: 4px 0;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        #ui span {
+            color: #f0c060;
+            font-weight: 600;
+        }
+        .key-hint {
+            font-size: 12px;
+            opacity: 0.6;
+            margin-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            padding-top: 8px;
+        }
+        #lock-hint {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.6);
+            font-family: sans-serif;
+            font-size: 16px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px 24px;
+            border-radius: 30px;
+            pointer-events: none;
+            user-select: none;
+            backdrop-filter: blur(2px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            transition: opacity 0.25s;
+            z-index: 10;
+        }
+        #lock-hint.hidden {
+            opacity: 0;
+        }
+        #model-status {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #aaddff;
+            font-family: sans-serif;
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 6px 18px;
+            border-radius: 20px;
+            pointer-events: none;
+            backdrop-filter: blur(2px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 10;
+            white-space: nowrap;
+        }
+        #reload-hint {
+            position: absolute;
+            bottom: 130px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.4);
+            font-family: sans-serif;
+            font-size: 13px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 4px 16px;
+            border-radius: 16px;
+            pointer-events: none;
+            user-select: none;
+            backdrop-filter: blur(2px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            z-index: 10;
+            white-space: nowrap;
+        }
+    </style>
+
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+
+</head>
+<body>
+
+    <div id="ui">
+        <h3>⬡ Infinite Ground · Model Loader</h3>
+        <p>Position: <span id="posDisplay">X: 0 &nbsp; Y: 0 &nbsp; Z: 0</span></p>
+        <p>Active Tiles: <span id="tileDisplay">0</span></p>
+        <p style="font-size:12px; opacity:0.5;">Yaw: <span id="yawDisplay">0</span>° &nbsp; Pitch: <span id="pitchDisplay">0</span>°</p>
+        <div class="key-hint">
+            W/S &nbsp; Forward/Back &nbsp;·&nbsp; A/D &nbsp; Strafe &nbsp;·&nbsp; Q/E &nbsp; Height
+            <br />🖱️ Click canvas &amp; move mouse to look &nbsp;·&nbsp; <b>R</b> reload models
+        </div>
+    </div>
+    <div id="lock-hint">🖱️ Click to lock mouse</div>
+    <div id="model-status">Models loaded: <span id="modelCount">0</span></div>
+    <div id="reload-hint">Press <b>R</b> to reload models</div>
+
+    <canvas id="renderCanvas" tabindex="1"></canvas>
+
+    <script>
+        (function() {
+            // ─── Verify GLB loader ──────────────────────────────────
+            if (BABYLON.SceneLoader.IsPluginForExtensionAvailable('.glb')) {
+                console.log('✅ GLB loader is registered.');
+            } else {
+                console.warn('⚠️ GLB loader not found.');
+            }
+
+            const canvas = document.getElementById("renderCanvas");
+            const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true });
+
+            // ─── CONFIG ────────────────────────────────────────────────
+            const TILE_SIZE = 1000;
+            const VIEW_DISTANCE = 5000;
+            const MOVE_SPEED = 50;
+            const TILE_RADIUS = Math.ceil(VIEW_DISTANCE / TILE_SIZE);
+            const MOUSE_SENSITIVITY = 0.003;
+            const TEXTURE_REPEAT_PER_UNIT = 0.8;
+            const TEXTURE_URL = "assets/txts/desert_sand2.jpg";
+
+            const horizonColor = new BABYLON.Color3(0.53, 0.78, 0.98);
+
+            // ─── MODELS CONFIG ────────────────────────────────────────
+            // Use .obj files – make sure your .obj, .mtl, and textures
+            // are in the same folder (or use relative paths in .mtl).
+            // Example:
+            const modelsConfig = [
+                {
+                    file: "assets/objs/PLANE.glb",   // change to your .obj
+                    position: [0, 0, 0],
+                    scale: [1, 1, 1],
+                    shininess: 32,
+                    mirror: 0.3,
+                    alpha: 1.0,
+                    rotation: [Math.PI / 2,0, 0],
+                },
+               
+
+            ];
+
+            // ─── SCENE SETUP ──────────────────────────────────────────
+            const createScene = function() {
+                const scene = new BABYLON.Scene(engine);
+                scene.clearColor = horizonColor;
+                scene.fogMode = BABYLON.Scene.FOGMODE_LINEAR;
+                scene.fogColor = horizonColor;
+                scene.fogStart = 3500;
+                scene.fogEnd = 5200;
+                scene.ambientColor = new BABYLON.Color3(0.55, 0.55, 0.55);
+
+                // ─── LIGHTING ──────────────────────────────────────────
+                const hemi = new BABYLON.HemisphericLight("hemi", new BABYLON.Vector3(0, 0, 1), scene);
+                hemi.intensity = 1.2;
+                hemi.groundColor = new BABYLON.Color3(0.45, 0.48, 0.55);
+
+                const dirLight = new BABYLON.DirectionalLight("dirLight", new BABYLON.Vector3(-1.2, -0.8, -2.5), scene);
+                dirLight.intensity = 1.8;
+
+                const fillLight = new BABYLON.DirectionalLight("fillLight", new BABYLON.Vector3(0.6, 1.0, -1.8), scene);
+                fillLight.intensity = 0.95;
+
+                // ─── CAMERA ──────────────────────────────────────────
+                const camera = new BABYLON.FreeCamera("camera", new BABYLON.Vector3(0, -2000, 80), scene);
+                camera.upVector = new BABYLON.Vector3(0, 0, 1);
+
+                let yaw = 0;
+                let pitch = 0;
+                const initialDir = new BABYLON.Vector3(0, 1, 0);
+                camera.target = camera.position.add(initialDir);
+
+                // ─── Pointer Lock ──────────────────────────────────
+                let isLocked = false;
+                const lockHint = document.getElementById("lock-hint");
+                canvas.addEventListener("click", () => {
+                    if (!document.pointerLockElement) {
+                        canvas.requestPointerLock();
+                    }
+                });
+                document.addEventListener("pointerlockchange", () => {
+                    isLocked = (document.pointerLockElement === canvas);
+                    lockHint.classList.toggle("hidden", isLocked);
+                    canvas.style.cursor = isLocked ? "none" : "default";
+                });
+                document.addEventListener("mousemove", (event) => {
+                    if (!isLocked) return;
+                    const deltaX = event.movementX || 0;
+                    const deltaY = event.movementY || 0;
+                    yaw -= deltaX * MOUSE_SENSITIVITY;
+                    pitch -= deltaY * MOUSE_SENSITIVITY;
+                    pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
+                });
+
+                // ─── SKYDOME ─────────────────────────────────────────
+                const skybox = BABYLON.MeshBuilder.CreateSphere("skyBox", { segments: 12, diameter: VIEW_DISTANCE * 2.0 },
+                scene);
+                const skyMat = new BABYLON.StandardMaterial("skyBoxMat", scene);
+                skyMat.backFaceCulling = false;
+                skyMat.emissiveColor = horizonColor.clone();
+                skyMat.disableLighting = true;
+                skybox.material = skyMat;
+                skybox.applyFog = false;
+
+                // ─── ENVIRONMENT TEXTURE (for mirror) ──────────────
+                let envTexture = null;
+                try {
+                    envTexture = new BABYLON.CubeTexture(
+                        "https://playground.babylonjs.com/textures/environment.dds",
+                        scene
+                    );
+                } catch (e) {
+                    console.warn("Could not load environment map.");
+                }
+
+                // ─── TILE SYSTEM ─────────────────────────────────────
+                const activeTiles = new Map();
+                const inputMap = {};
+                window.addEventListener("keydown", (e) => { inputMap[e.code] = true; });
+                window.addEventListener("keyup", (e) => { inputMap[e.code] = false; });
+                window.addEventListener("DOMContentLoaded", () => canvas.focus());
+                canvas.addEventListener("click", () => canvas.focus());
+
+                function createTileMesh(tx, ty) {
+                    const name = `tile_${tx}_${ty}`;
+                    const tile = BABYLON.MeshBuilder.CreatePlane(name, { width: TILE_SIZE, height: TILE_SIZE }, scene);
+                    tile.position.x = tx * TILE_SIZE;
+                    tile.position.y = ty * TILE_SIZE;
+                    tile.position.z = 0;
+
+                    const mat = new BABYLON.StandardMaterial(`mat_${name}`, scene);
+                    const tex = new BABYLON.Texture(TEXTURE_URL, scene);
+                    tex.wrapU = BABYLON.Texture.WRAP_ADDRESSMODE;
+                    tex.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE;
+                    const scale = TILE_SIZE * TEXTURE_REPEAT_PER_UNIT;
+                    tex.uScale = scale;
+                    tex.vScale = scale;
+                    tex.uOffset = tx * TILE_SIZE * TEXTURE_REPEAT_PER_UNIT;
+                    tex.vOffset = ty * TILE_SIZE * TEXTURE_REPEAT_PER_UNIT;
+
+                    mat.diffuseTexture = tex;
+                    mat.diffuseColor = new BABYLON.Color3(0.95, 0.90, 0.82);
+                    mat.specularColor = new BABYLON.Color3(0.12, 0.12, 0.10);
+                    mat.specularPower = 24;
+                    mat.emissiveColor = new BABYLON.Color3(0.08, 0.06, 0.04);
+                    mat.backFaceCulling = false;
+                    tex.onLoadError = () => {
+                        mat.diffuseColor = new BABYLON.Color3(0.85, 0.78, 0.65);
+                        mat.emissiveColor = new BABYLON.Color3(0.10, 0.08, 0.05);
+                    };
+                    tile.material = mat;
+                    return tile;
+                }
+
+                function updateTiles() {
+                    const px = camera.position.x;
+                    const py = camera.position.y;
+                    const cx = Math.round(px / TILE_SIZE);
+                    const cy = Math.round(py / TILE_SIZE);
+                    const visible = new Set();
+                    for (let dx = -TILE_RADIUS; dx <= TILE_RADIUS; dx++) {
+                        for (let dy = -TILE_RADIUS; dy <= TILE_RADIUS; dy++) {
+                            const tx = cx + dx;
+                            const ty = cy + dy;
+                            const wx = tx * TILE_SIZE;
+                            const wy = ty * TILE_SIZE;
+                            const dist = Math.hypot(px - wx, py - wy);
+                            if (dist <= VIEW_DISTANCE) {
+                                const key = `${tx},${ty}`;
+                                visible.add(key);
+                                if (!activeTiles.has(key)) {
+                                    activeTiles.set(key, createTileMesh(tx, ty));
+                                }
+                            }
+                        }
+                    }
+                    for (const [key, mesh] of activeTiles) {
+                        if (!visible.has(key)) {
+                            mesh.dispose(false, true);
+                            activeTiles.delete(key);
+                        }
+                    }
+                    document.getElementById("tileDisplay").innerText = activeTiles.size;
+                }
+
+                // ─── MODEL LOADER ─────────────────────────────────────
+                let loadedModelGroups = [];
+
+                function applyMaterialProperties(rootMesh, config) {
+                    rootMesh.getChildMeshes().forEach(mesh => {
+                        const mat = mesh.material;
+                        if (!mat) return;
+                        if (config.shininess !== undefined) {
+                            if (mat instanceof BABYLON.StandardMaterial) {
+                                mat.specularPower = config.shininess;
+                                mat.specularColor = new BABYLON.Color3(0.8, 0.8, 0.8);
+                            } else if (mat instanceof BABYLON.PBRMaterial) {
+                                mat.roughness = Math.max(0, 1 - config.shininess / 100);
+                            }
+                        }
+                        if (config.mirror !== undefined && envTexture) {
+                            const intensity = Math.min(1, Math.max(0, config.mirror));
+                            if (mat instanceof BABYLON.StandardMaterial) {
+                                mat.reflectionTexture = envTexture;
+                                mat.reflectionFresnelWeight = intensity;
+                                mat.specularColor = new BABYLON.Color3(0.8, 0.8, 0.8);
+                            } else if (mat instanceof BABYLON.PBRMaterial) {
+                                mat.environmentTexture = envTexture;
+                                mat.metallic = intensity;
+                                mat.roughness = 1 - intensity * 0.9;
+                            }
+                        } else if (config.mirror === 0) {
+                            if (mat instanceof BABYLON.StandardMaterial) {
+                                mat.reflectionTexture = null;
+                            } else if (mat instanceof BABYLON.PBRMaterial) {
+                                mat.environmentTexture = null;
+                            }
+                        }
+                        if (config.alpha !== undefined) {
+                            const alpha = Math.min(1, Math.max(0, config.alpha));
+                            mat.alpha = alpha;
+                            if (alpha < 1) {
+                                mat.transparencyMode = BABYLON.Material.MATERIAL_ALPHABLEND;
+                                mat.backFaceCulling = false;
+                            } else {
+                                mat.transparencyMode = BABYLON.Material.MATERIAL_OPAQUE;
+                            }
+                        }
+                    });
+                }
+
+                function reloadModels() {
+                    console.log("🔄 Reloading models...");
+                    // Dispose old
+                    loadedModelGroups.forEach(group => {
+                        if (group.root) group.root.dispose(false, true);
+                        if (group.animationGroups) group.animationGroups.forEach(ag => ag.dispose());
+                    });
+                    loadedModelGroups = [];
+
+                    if (!modelsConfig || modelsConfig.length === 0) {
+                        document.getElementById("modelCount").innerText = "0";
+                        return;
+                    }
+
+                    let loadCounter = 0;
+
+                    modelsConfig.forEach((cfg, index) => {
+                        // Split the file path into rootUrl and filename
+                        const fullPath = cfg.file;
+                        const lastSlash = fullPath.lastIndexOf('/');
+                        let rootUrl = "";
+                        let filename = fullPath;
+                        if (lastSlash !== -1) {
+                            rootUrl = fullPath.substring(0, lastSlash + 1); // include trailing slash
+                            filename = fullPath.substring(lastSlash + 1);
+                        }
+                        console.log(`Loading ${filename} from root: ${rootUrl}`);
+
+                        const pos = cfg.position || [0, 0, 0];
+                        const rot = cfg.rotation || [0, 0, 0];
+                        const scale = cfg.scale || [1, 1, 1];
+
+                        BABYLON.SceneLoader.ImportMesh(
+                            "",                // mesh names
+                            rootUrl,           // base folder
+                            filename,          // file name
+                            scene,
+                            (meshes, particleSystems, skeletons, animationGroups) => {
+                                const root = new BABYLON.TransformNode(`model_root_${index}`, scene);
+
+                                // IMPORTANT: only reparent TOP-LEVEL meshes (those with no
+                                // existing parent) onto our new root. GLB/GLTF imports
+                                // preserve the original Blender hierarchy (parts parented
+                                // to other parts / an armature / an empty), and each mesh's
+                                // position/rotation/scale is LOCAL to its own parent.
+                                //
+                                // Reparenting every mesh directly to `root` (the old code
+                                // did `meshes.forEach(m => m.parent = root)`) discards that
+                                // hierarchy: each mesh keeps its local transform, but that
+                                // transform is now interpreted relative to `root` instead of
+                                // its real parent, which snaps every child part toward the
+                                // origin and makes the model look "disassembled".
+                                //
+                                // Leaving nested meshes attached to their original parent
+                                // (and only re-parenting the top-level node(s), e.g. glTF's
+                                // "__root__" transform node) keeps the assembly intact.
+                                meshes.forEach(m => {
+                                    if (!m.parent) {
+                                        m.parent = root;
+                                    }
+                                });
+
+                                root.position.set(pos[0], pos[1], pos[2]);
+                                root.rotation.set(rot[0], rot[1], rot[2]);
+                                root.scaling.set(scale[0], scale[1], scale[2]);
+
+                                console.log(`✅ Model ${index} placed at (${root.position.x}, ${root.position.y}, ${root.position.z})`);
+
+                                applyMaterialProperties(root, cfg);
+
+                                let animGroups = [];
+                                if (animationGroups && animationGroups.length > 0) {
+                                    const speed = cfg.speed || 1.0;
+                                    animationGroups.forEach(ag => {
+                                        ag.speedRatio = speed;
+                                        if (cfg.loopAnim !== false) ag.loopAnimation = true;
+                                        ag.play(true);
+                                        animGroups.push(ag);
+                                    });
+                                }
+
+                                loadedModelGroups.push({ root, animationGroups: animGroups });
+                                loadCounter++;
+                                document.getElementById("modelCount").innerText = loadCounter;
+                            },
+                            null,
+                            (err) => {
+                                console.error(`❌ Failed to load model "${cfg.file}":`, err);
+                                loadCounter++;
+                                document.getElementById("modelCount").innerText = loadCounter;
+                            }
+                        );
+                    });
+                }
+
+                window.reloadModels = reloadModels;
+                window.printConfig = () => {
+                    console.log("Current modelsConfig:");
+                    modelsConfig.forEach((cfg, i) => {
+                        console.log(`  ${i}: ${cfg.file} -> position [${cfg.position.join(', ')}]`);
+                    });
+                };
+
+                // ─── Keyboard shortcut ──────────────────────────────
+                window.addEventListener("keydown", (e) => {
+                    if (e.code === "KeyR" && !e.ctrlKey && !e.metaKey) {
+                        e.preventDefault();
+                        reloadModels();
+                    }
+                });
+
+                // ─── RENDER LOOP ─────────────────────────────────────
+                scene.onBeforeRenderObservable.add(() => {
+                    const dt = engine.getDeltaTime() / 1000;
+                    const speed = MOVE_SPEED * dt;
+
+                    const forward = new BABYLON.Vector3(
+                        Math.sin(yaw) * Math.cos(pitch),
+                        Math.cos(yaw) * Math.cos(pitch),
+                        Math.sin(pitch)
+                    );
+                    forward.normalize();
+                    camera.target = camera.position.add(forward);
+
+                    let horizontalForward = new BABYLON.Vector3(forward.x, forward.y, 0);
+                    if (horizontalForward.lengthSquared() > 0.0001) horizontalForward.normalize();
+                    else horizontalForward = new BABYLON.Vector3(0, 1, 0);
+                    const up = new BABYLON.Vector3(0, 0, 1);
+                    const right = BABYLON.Vector3.Cross(horizontalForward, up);
+                    if (right.lengthSquared() > 0.0001) right.normalize();
+
+                    let moveVec = new BABYLON.Vector3(0, 0, 0);
+                    if (inputMap["KeyW"]) moveVec.addInPlace(horizontalForward);
+                    if (inputMap["KeyS"]) moveVec.addInPlace(horizontalForward.scale(-1));
+                    if (inputMap["KeyA"]) moveVec.addInPlace(right.scale(-1));
+                    if (inputMap["KeyD"]) moveVec.addInPlace(right);
+                    if (inputMap["KeyE"]) moveVec.addInPlace(up);
+                    if (inputMap["KeyQ"]) moveVec.addInPlace(up.scale(-1));
+
+                    if (moveVec.lengthSquared() > 0) {
+                        moveVec.normalize().scaleInPlace(speed);
+                        camera.position.addInPlace(moveVec);
+                    }
+
+                    skybox.position.copyFrom(camera.position);
+                    updateTiles();
+
+                    document.getElementById("posDisplay").innerText =
+                        `X: ${camera.position.x.toFixed(0)}  Y: ${camera.position.y.toFixed(0)}  Z: ${camera.position.z.toFixed(0)}`;
+                    document.getElementById("yawDisplay").innerText = (yaw * 180 / Math.PI).toFixed(1);
+                    document.getElementById("pitchDisplay").innerText = (pitch * 180 / Math.PI).toFixed(1);
+                });
+
+                setTimeout(() => reloadModels(), 100);
+                return scene;
+            };
+
+            // ─── BOOT ────────────────────────────────────────────────
+            const scene = createScene();
+            engine.runRenderLoop(() => scene.render());
+            window.addEventListener("resize", () => engine.resize());
+            document.addEventListener("click", () => canvas.focus());
+
+            console.log("%c Infinite Ground – Model Loader (OBJ ready)", "font-size:20px; font-weight:bold;");
+            console.log("Edit 'modelsConfig' and press 'R' to reload.");
+        })();
+    </script>
+</body>
+</html>
