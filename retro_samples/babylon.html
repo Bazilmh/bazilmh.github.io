@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Babylon.js - Infinite Sea with Floating Model</title>
+    <style>
+        html, body {
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: #0a0a1a;
+        }
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.85);
+            color: #fff;
+            font-family: Arial, sans-serif;
+            font-size: 20px;
+            z-index: 10;
+            pointer-events: none;
+            transition: opacity 0.5s;
+        }
+        #loading.hidden {
+            opacity: 0;
+        }
+        #loading .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255,255,255,0.2);
+            border-top: 4px solid #4a9eff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #info {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.5);
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            z-index: 5;
+            background: rgba(0,0,0,0.5);
+            padding: 8px 16px;
+            border-radius: 20px;
+            pointer-events: none;
+        }
+    </style>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+</head>
+<body>
+
+    <div id="loading">
+        <div class="spinner"></div>
+        <div id="loadingText">Loading Model...</div>
+    </div>
+    <canvas id="renderCanvas"></canvas>
+    <div id="info">🖱️ Drag to rotate · Scroll to zoom · Model bobs on the waves</div>
+
+    <script>
+        const canvas = document.getElementById("renderCanvas");
+        const loadingEl = document.getElementById("loading");
+        const loadingText = document.getElementById("loadingText");
+
+        const engine = new BABYLON.Engine(canvas, true);
+
+        const createScene = function () {
+            const scene = new BABYLON.Scene(engine);
+            scene.clearColor = new BABYLON.Color4(0.02, 0.05, 0.1, 1);
+            scene.fogMode = BABYLON.Scene.FOGMODE_EXP;
+            scene.fogDensity = 0.015;
+            scene.fogColor = new BABYLON.Color3(0.02, 0.05, 0.1);
+
+            // --- CAMERA ---
+            const camera = new BABYLON.ArcRotateCamera(
+                "camera",
+                BABYLON.Tools.ToRadians(-30),
+                BABYLON.Tools.ToRadians(55),
+                8,
+                new BABYLON.Vector3(0, 0.5, 0),
+                scene
+            );
+            camera.attachControl(canvas, true);
+            camera.wheelPrecision = 50;
+            camera.minZ = 0.1;
+            camera.maxZ = 200;
+            camera.lowerRadiusLimit = 2;
+            camera.upperRadiusLimit = 20;
+
+            // --- LIGHTS ---
+            // Ambient sky light
+            const hemiLight = new BABYLON.HemisphericLight("hemiLight", new BABYLON.Vector3(0, 1, 0), scene);
+            hemiLight.intensity = 0.5;
+            hemiLight.groundColor = new BABYLON.Color3(0.1, 0.2, 0.3);
+
+            // Main sunlight
+            const sunLight = new BABYLON.DirectionalLight("sunLight", new BABYLON.Vector3(-0.5, -1, -0.3), scene);
+            sunLight.intensity = 0.8;
+            sunLight.position = new BABYLON.Vector3(10, 20, 5);
+
+            // Fill light
+            const fillLight = new BABYLON.DirectionalLight("fillLight", new BABYLON.Vector3(0.5, -0.3, 1), scene);
+            fillLight.intensity = 0.3;
+
+            // --- INFINITE SEA ---
+            // Create a large ground with custom material
+            const seaSize = 100;
+            const sea = BABYLON.MeshBuilder.CreateGround("sea", {
+                width: seaSize,
+                height: seaSize,
+                subdivisions: 150
+            }, scene);
+
+            // Sea vertex shader for waves
+            const seaMaterial = new BABYLON.StandardMaterial("seaMat", scene);
+            seaMaterial.backFaceCulling = false;
+            seaMaterial.diffuseColor = new BABYLON.Color3(0.05, 0.15, 0.25);
+            seaMaterial.specularColor = new BABYLON.Color3(0.1, 0.2, 0.4);
+            seaMaterial.specularPower = 32;
+            seaMaterial.alpha = 0.95;
+
+            // Add wave animation using vertex data
+            const positions = sea.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+            const normals = sea.getVerticesData(BABYLON.VertexBuffer.NormalKind);
+            const indices = sea.getIndices();
+            const originalPositions = positions.slice();
+
+            // Store wave data per vertex
+            const waveData = [];
+            for (let i = 0; i < positions.length; i += 3) {
+                const x = positions[i];
+                const z = positions[i + 2];
+                waveData.push({
+                    phase1: Math.random() * Math.PI * 2,
+                    phase2: Math.random() * Math.PI * 2,
+                    amp1: 0.1 + Math.random() * 0.15,
+                    amp2: 0.05 + Math.random() * 0.1,
+                    freq1: 0.3 + Math.random() * 0.2,
+                    freq2: 0.5 + Math.random() * 0.3
+                });
+            }
+
+            // Wave animation
+            let time = 0;
+            scene.onBeforeRenderObservable.add(() => {
+                time += 0.01;
+
+                const positions2 = sea.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+                const newPositions = [];
+
+                for (let i = 0; i < positions2.length; i += 3) {
+                    const idx = i / 3;
+                    const origX = originalPositions[i];
+                    const origZ = originalPositions[i + 2];
+                    const data = waveData[idx];
+
+                    // Multi-wave combination for realistic ocean
+                    const wave1 = Math.sin(origX * data.freq1 + time * 0.8 + data.phase1) * data.amp1;
+                    const wave2 = Math.sin(origZ * data.freq2 + time * 0.6 + data.phase2) * data.amp2;
+                    const wave3 = Math.sin((origX + origZ) * 0.15 + time * 0.4) * 0.05;
+
+                    const y = wave1 + wave2 + wave3;
+
+                    newPositions[i] = origX;
+                    newPositions[i + 1] = y - 1.0; // Lower sea level
+                    newPositions[i + 2] = origZ;
+                }
+
+                sea.updateVerticesData(BABYLON.VertexBuffer.PositionKind, newPositions);
+                sea.updateVerticesData(BABYLON.VertexBuffer.NormalKind, sea.getVerticesData(BABYLON.VertexBuffer.NormalKind));
+            });
+
+            sea.material = seaMaterial;
+
+            // --- FLOATING MODEL ---
+            let modelContainer = null;
+            let modelYOffset = 0;
+            let modelBobPhase = Math.random() * Math.PI * 2;
+
+            // Load the model
+            const modelUrl = "mdls/bottle.glb";
+            const fallbackUrl = "https://babylonjs.com/assets/glTF/Duck/Duck.gltf";
+
+            let loadAttempted = false;
+
+            function loadModel(url, isFallback = false) {
+                if (loadAttempted && !isFallback) return;
+                loadAttempted = true;
+
+                loadingText.textContent = isFallback ? "Trying fallback model..." : "Loading Model...";
+
+                BABYLON.SceneLoader.ImportMesh(
+                    "",
+                    "",
+                    url,
+                    scene,
+                    function (meshes) {
+                        console.log("✅ Model loaded:", url);
+                        loadingEl.classList.add("hidden");
+
+                        modelContainer = new BABYLON.TransformNode("modelContainer", scene);
+
+                        // Scale model
+                        let totalSize = 0;
+                        let meshCount = 0;
+
+                        meshes.forEach(mesh => {
+                            mesh.parent = modelContainer;
+                            if (mesh.getBoundingInfo) {
+                                const info = mesh.getBoundingInfo();
+                                if (info && info.boundingBox) {
+                                    const size = info.boundingBox.extendSize;
+                                    totalSize += size.x + size.y + size.z;
+                                    meshCount++;
+                                }
+                            }
+                        });
+
+                        if (meshCount > 0) {
+                            const avgSize = totalSize / (meshCount * 3);
+                            if (avgSize > 0) {
+                                const targetSize = 1.2;
+                                const scale = targetSize / avgSize;
+                                const finalScale = Math.min(Math.max(scale, 0.1), 5);
+                                modelContainer.scaling = new BABYLON.Vector3(finalScale, finalScale, finalScale);
+                            }
+                        }
+
+                        modelContainer.position = new BABYLON.Vector3(0, 0.5, 0);
+
+                        // Play animations if available
+                        meshes.forEach(mesh => {
+                            if (mesh.animations && mesh.animations.length > 0) {
+                                scene.beginAnimation(mesh, 0, 100, true, 1.0);
+                            }
+                        });
+
+                        loadingEl.classList.add("hidden");
+                    },
+                    function (progress) {
+                        const percent = Math.round((progress.loaded / progress.total) * 100);
+                        if (!isNaN(percent)) {
+                            loadingText.textContent = `Loading Model... ${percent}%`;
+                        }
+                    },
+                    function (scene, message, exception) {
+                        console.error("❌ Failed:", url, message);
+                        if (!isFallback) {
+                            loadAttempted = false;
+                            loadModel(fallbackUrl, true);
+                        } else {
+                            loadingText.textContent = "⚠️ Using fallback cube";
+                            // Fallback: create a glowing cube
+                            const box = BABYLON.MeshBuilder.CreateBox("fallback", { size: 1.2 }, scene);
+                            const mat = new BABYLON.StandardMaterial("fallbackMat", scene);
+                            mat.emissiveColor = new BABYLON.Color3(0, 0.5, 1);
+                            mat.diffuseColor = new BABYLON.Color3(0, 0.6, 1);
+                            box.material = mat;
+                            modelContainer = new BABYLON.TransformNode("modelContainer", scene);
+                            box.parent = modelContainer;
+                            modelContainer.position = new BABYLON.Vector3(0, 0.5, 0);
+                            loadingEl.classList.add("hidden");
+                        }
+                    }
+                );
+            }
+
+            loadModel(modelUrl);
+
+            // --- SUN / SKY DOME ---
+            const skybox = BABYLON.MeshBuilder.CreateSphere("skybox", { diameter: 500 }, scene);
+            const skyMat = new BABYLON.StandardMaterial("skyMat", scene);
+            skyMat.backFaceCulling = false;
+            skyMat.diffuseColor = new BABYLON.Color3(0.02, 0.04, 0.08);
+            skyMat.specularColor = new BABYLON.Color3(0, 0, 0);
+            skybox.material = skyMat;
+            skybox.position.y = 0;
+
+            // Sun glow
+            const sun = BABYLON.MeshBuilder.CreateSphere("sun", { diameter: 3 }, scene);
+            const sunMat = new BABYLON.StandardMaterial("sunMat", scene);
+            sunMat.emissiveColor = new BABYLON.Color3(1, 0.8, 0.4);
+            sunMat.diffuseColor = new BABYLON.Color3(0, 0, 0);
+            sun.material = sunMat;
+            sun.position = new BABYLON.Vector3(30, 40, -50);
+
+            // Sun glow aura
+            const glow = BABYLON.MeshBuilder.CreateSphere("glow", { diameter: 6 }, scene);
+            const glowMat = new BABYLON.StandardMaterial("glowMat", scene);
+            glowMat.emissiveColor = new BABYLON.Color3(1, 0.6, 0.2);
+            glowMat.alpha = 0.2;
+            glowMat.diffuseColor = new BABYLON.Color3(0, 0, 0);
+            glow.material = glowMat;
+            glow.position = sun.position.clone();
+
+            // --- MODEL FLOATING ANIMATION ---
+            scene.onBeforeRenderObservable.add(() => {
+                if (modelContainer) {
+                    // Bob up and down on the waves
+                    const bobSpeed = 0.8;
+                    const bobAmount = 0.15;
+                    modelBobPhase += 0.02;
+
+                    // Get wave height at model's position
+                    const modelX = modelContainer.position.x;
+                    const modelZ = modelContainer.position.z;
+
+                    // Simulate wave height at model position
+                    const waveHeight = 
+                        Math.sin(modelX * 0.3 + time * 0.8) * 0.12 +
+                        Math.sin(modelZ * 0.5 + time * 0.6) * 0.08 +
+                        Math.sin((modelX + modelZ) * 0.15 + time * 0.4) * 0.05;
+
+                    // Smooth bob
+                    const smoothBob = Math.sin(modelBobPhase) * bobAmount;
+
+                    // Final Y position: base + wave height + smooth bob
+                    modelContainer.position.y = 0.5 + waveHeight + smoothBob;
+
+                    // Slight tilt with the waves
+                    const tiltX = Math.sin(modelX * 0.2 + time * 0.5) * 0.03;
+                    const tiltZ = Math.sin(modelZ * 0.2 + time * 0.4 + 1) * 0.03;
+                    modelContainer.rotation.x = tiltX;
+                    modelContainer.rotation.z = tiltZ;
+
+                    // Auto-rotate
+                    modelContainer.rotation.y += 0.005;
+                }
+            });
+
+            return scene;
+        };
+
+        const scene = createScene();
+
+        engine.runRenderLoop(function () {
+            scene.render();
+        });
+
+        window.addEventListener("resize", function () {
+            engine.resize();
+        });
+    </script>
+</body>
+</html>

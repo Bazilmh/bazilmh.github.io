@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UI Kit — Component Library</title>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js">
+    </script>
+    <style>
+        /* ----- RESET & BASE (same theme) ----- */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #111111;
+            --bg-card: #1a1a1a;
+            --green-primary: #00ff41;
+            --green-secondary: #00cc33;
+            --green-glow: rgba(0, 255, 65, 0.25);
+            --green-dim: rgba(0, 255, 65, 0.08);
+            --text-primary: #e0e0e0;
+            --text-secondary: #aaaaaa;
+            --border-green: rgba(0, 255, 65, 0.2);
+            --font-mono: 'Courier New', monospace;
+            --transition: 0.3s ease;
+        }
+
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding-top: 80px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--green-primary);
+            border-radius: 4px;
+            box-shadow: 0 0 20px var(--green-glow);
+        }
+
+        .glow-text {
+            color: var(--green-primary);
+            text-shadow: 0 0 20px var(--green-glow);
+        }
+
+        /* ----- BUTTONS (extended) ----- */
+        .btn {
+            display: inline-block;
+            padding: 12px 28px;
+            border: 2px solid var(--green-primary);
+            border-radius: 4px;
+            background: transparent;
+            color: var(--green-primary);
+            font-weight: 600;
+            font-size: 0.95rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: var(--transition);
+            font-family: var(--font-mono);
+            position: relative;
+            overflow: hidden;
+            text-decoration: none;
+        }
+        .btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: var(--green-primary);
+            transform: scaleX(0);
+            transform-origin: right;
+            transition: transform 0.4s ease;
+            z-index: 0;
+        }
+        .btn:hover::before {
+            transform: scaleX(1);
+            transform-origin: left;
+        }
+        .btn:hover {
+            color: #0a0a0a;
+            box-shadow: 0 0 40px var(--green-glow);
+        }
+        .btn span {
+            position: relative;
+            z-index: 1;
+        }
+        .btn-primary {
+            background: var(--green-primary);
+            color: #0a0a0a;
+        }
+        .btn-primary::before {
+            background: #fff;
+        }
+        .btn-primary:hover {
+            color: #0a0a0a;
+        }
+        .btn-sm {
+            padding: 8px 18px;
+            font-size: 0.75rem;
+        }
+        .btn-lg {
+            padding: 16px 40px;
+            font-size: 1.1rem;
+        }
+        .btn-block {
+            display: block;
+            width: 100%;
+            text-align: center;
+        }
+        .btn-outline-light {
+            border-color: var(--text-secondary);
+            color: var(--text-secondary);
+        }
+        .btn-outline-light::before {
+            background: var(--text-secondary);
+        }
+        .btn-outline-light:hover {
+            color: #0a0a0a;
+        }
+        .btn-danger {
+            border-color: #ff3860;
+            color: #ff3860;
+        }
+        .btn-danger::before {
+            background: #ff3860;
+        }
+        .btn-danger:hover {
+            color: #0a0a0a;
+        }
+
+        /* ----- TABLE ----- */
+        .table-wrapper {
+            overflow-x: auto;
+            border: 1px solid var(--border-green);
+            border-radius: 8px;
+            background: var(--bg-secondary);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+        }
+        th,
+        td {
+            padding: 14px 20px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-green);
+        }
+        th {
+            background: var(--bg-card);
+            color: var(--green-primary);
+            font-family: var(--font-mono);
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+        }
+        tr:hover td {
+            background: var(--green-dim);
+        }
+        .table-status {
+            display: inline-block;
+            padding: 2px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            border: 1px solid;
+        }
+        .table-status.active {
+            color: var(--green-primary);
+            border-color: var(--green-primary);
+            background: var(--green-dim);
+        }
+        .table-status.pending {
+            color: #ffb86c;
+            border-color: #ffb86c;
+            background: rgba(255, 184, 108, 0.08);
+        }
+        .table-status.inactive {
+            color: #ff3860;
+            border-color: #ff3860;
+            background: rgba(255, 56, 96, 0.08);
+        }
+
+        /* ----- CARDS ----- */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 24px;
+            margin: 24px 0;
+        }
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-green);
+            border-radius: 10px;
+            padding: 28px 24px;
+            transition: var(--transition);
+        }
+        .card:hover {
+            border-color: var(--green-primary);
+            box-shadow: 0 8px 40px rgba(0, 255, 65, 0.05);
+            transform: translateY(-4px);
+        }
+        .card .icon {
+            font-size: 2rem;
+            color: var(--green-primary);
+            margin-bottom: 12px;
+            display: inline-block;
+        }
+        .card h4 {
+            font-size: 1.2rem;
+            margin-bottom: 6px;
+        }
+        .card p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        /* ----- FORMS ----- */
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+        .form-control {
+            width: 100%;
+            padding: 12px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-green);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 1rem;
+            transition: var(--transition);
+            outline: none;
+        }
+        .form-control:focus {
+            border-color: var(--green-primary);
+            box-shadow: 0 0 20px var(--green-glow);
+        }
+        .form-control::placeholder {
+            color: #555;
+        }
+        select.form-control {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2300ff41' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 16px center;
+            cursor: pointer;
+        }
+        .form-check {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+            cursor: pointer;
+        }
+        .form-check input[type="checkbox"],
+        .form-check input[type="radio"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--green-primary);
+            cursor: pointer;
+            filter: drop-shadow(0 0 6px var(--green-glow));
+        }
+
+        /* toggle switch */
+        .toggle-wrap {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .toggle {
+            width: 48px;
+            height: 26px;
+            background: var(--bg-card);
+            border-radius: 40px;
+            border: 1px solid var(--border-green);
+            cursor: pointer;
+            position: relative;
+            transition: var(--transition);
+        }
+        .toggle.active {
+            background: var(--green-primary);
+            border-color: var(--green-primary);
+        }
+        .toggle .knob {
+            width: 20px;
+            height: 20px;
+            background: #fff;
+            border-radius: 50%;
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            transition: var(--transition);
+        }
+        .toggle.active .knob {
+            left: 24px;
+            background: #0a0a0a;
+        }
+
+        /* ----- ALERTS ----- */
+        .alert {
+            padding: 16px 20px;
+            border-radius: 6px;
+            border-left: 4px solid;
+            background: var(--bg-card);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .alert-success {
+            border-color: var(--green-primary);
+            color: var(--green-primary);
+        }
+        .alert-warning {
+            border-color: #ffb86c;
+            color: #ffb86c;
+        }
+        .alert-error {
+            border-color: #ff3860;
+            color: #ff3860;
+        }
+        .alert-info {
+            border-color: #6cc4ff;
+            color: #6cc4ff;
+        }
+        .alert i {
+            font-size: 1.2rem;
+        }
+
+        /* ----- BREADCRUMBS ----- */
+        .breadcrumb {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 12px;
+            list-style: none;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-green);
+            margin-bottom: 24px;
+        }
+        .breadcrumb li+li::before {
+            content: '/';
+            margin-right: 12px;
+            color: var(--text-secondary);
+        }
+        .breadcrumb a {
+            color: var(--green-primary);
+            text-decoration: none;
+        }
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+        .breadcrumb .current {
+            color: var(--text-secondary);
+        }
+
+        /* ----- PAGINATION ----- */
+        .pagination {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 24px 0;
+        }
+        .pagination button {
+            padding: 8px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-green);
+            border-radius: 4px;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: var(--transition);
+            font-family: var(--font-mono);
+        }
+        .pagination button:hover,
+        .pagination button.active {
+            background: var(--green-primary);
+            color: #0a0a0a;
+            border-color: var(--green-primary);
+            box-shadow: 0 0 20px var(--green-glow);
+        }
+
+        /* ----- TABS ----- */
+        .tabs {
+            border-bottom: 1px solid var(--border-green);
+            display: flex;
+            gap: 4px;
+            margin-bottom: 20px;
+        }
+        .tab-btn {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            border-bottom: 2px solid transparent;
+            font-family: var(--font-mono);
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+        }
+        .tab-btn.active {
+            color: var(--green-primary);
+            border-bottom-color: var(--green-primary);
+            text-shadow: 0 0 20px var(--green-glow);
+        }
+        .tab-btn:hover {
+            color: #fff;
+        }
+        .tab-panel {
+            display: none;
+            padding: 20px 0;
+        }
+        .tab-panel.active {
+            display: block;
+            animation: fadeUp 0.4s ease;
+        }
+
+        /* ----- ACCORDION ----- */
+        .accordion-item {
+            border-bottom: 1px solid var(--border-green);
+        }
+        .accordion-header {
+            padding: 16px 0;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            transition: var(--transition);
+        }
+        .accordion-header:hover {
+            color: var(--green-primary);
+        }
+        .accordion-header .arrow {
+            transition: var(--transition);
+        }
+        .accordion-header.open .arrow {
+            transform: rotate(180deg);
+        }
+        .accordion-body {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease, padding 0.4s ease;
+            padding: 0 0;
+            color: var(--text-secondary);
+        }
+        .accordion-body.open {
+            max-height: 300px;
+            padding: 0 0 20px 0;
+        }
+
+        /* ----- PROGRESS ----- */
+        .progress-wrap {
+            margin: 16px 0;
+        }
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+        .progress-bar {
+            height: 8px;
+            background: var(--bg-card);
+            border-radius: 20px;
+            overflow: hidden;
+            border: 1px solid var(--border-green);
+        }
+        .progress-bar .fill {
+            height: 100%;
+            background: var(--green-primary);
+            border-radius: 20px;
+            width: 0%;
+            box-shadow: 0 0 20px var(--green-glow);
+            transition: width 1s ease;
+        }
+
+        /* ----- LAYOUT HELPERS ----- */
+        .section-block {
+            padding: 48px 0;
+            border-bottom: 1px solid var(--border-green);
+        }
+        .section-block:last-of-type {
+            border-bottom: none;
+        }
+        .section-title-sm {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .section-desc {
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+        .flex-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: center;
+        }
+        .gap-2 {
+            gap: 12px;
+        }
+        .mt-2 {
+            margin-top: 16px;
+        }
+        .mb-2 {
+            margin-bottom: 16px;
+        }
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        /* ----- HEADER (kit nav) ----- */
+        .kit-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            background: rgba(10, 10, 10, 0.92);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border-green);
+            padding: 0 24px;
+            height: 68px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .kit-header .logo {
+            font-family: var(--font-mono);
+            font-size: 1.3rem;
+            color: var(--green-primary);
+            text-shadow: 0 0 30px var(--green-glow);
+        }
+        .kit-header .logo span {
+            color: #fff;
+        }
+        .kit-header nav a {
+            color: var(--text-secondary);
+            margin-left: 24px;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: var(--transition);
+            text-decoration: none;
+        }
+        .kit-header nav a:hover {
+            color: var(--green-primary);
+        }
+
+        /* responsive */
+        @media (max-width: 768px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+            .kit-header nav a {
+                margin-left: 16px;
+                font-size: 0.75rem;
+            }
+            .card-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        @media (max-width: 480px) {
+            .card-grid {
+                grid-template-columns: 1fr;
+            }
+            .flex-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .kit-header nav a {
+                margin-left: 12px;
+                font-size: 0.7rem;
+            }
+        }
+
+        @keyframes fadeUp {
+            0% {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* chart containers */
+        .chart-container {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-green);
+            border-radius: 8px;
+            padding: 20px;
+            position: relative;
+            height: 260px;
+        }
+        .chart-container canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ===== KIT HEADER ===== -->
+    <header class="kit-header">
+        <div class="logo">UI<span>Kit</span></div>
+        <nav>
+            <a href="#buttons">Buttons</a>
+            <a href="#tables">Tables</a>
+            <a href="#charts">Charts</a>
+            <a href="#forms">Forms</a>
+            <a href="#components">More</a>
+        </nav>
+    </header>
+
+    <div class="container">
+
+        <!-- ===== INTRO ===== -->
+        <section class="section-block" style="padding-top:20px;">
+            <h1 class="section-title-sm">⚡ Component Library</h1>
+            <p class="section-desc" style="max-width:600px;">
+                Black &amp; fluorescent green — Tron‑inspired UI kit. Copy any block below to build your own pages.
+            </p>
+            <div class="flex-row">
+                <span class="btn btn-sm"><span><i class="fas fa-code"></i> Copy me</span></span>
+                <span class="btn btn-sm btn-primary"><span><i class="fas fa-download"></i> Download</span></span>
+            </div>
+        </section>
+
+        <!-- ===== BUTTONS ===== -->
+        <section class="section-block" id="buttons">
+            <h2 class="section-title-sm">Buttons</h2>
+            <p class="section-desc">Variants: primary, outline, danger, sizes, block, with icons.</p>
+            <div class="flex-row gap-2">
+                <button class="btn"><span>Default</span></button>
+                <button class="btn btn-primary"><span>Primary</span></button>
+                <button class="btn btn-outline-light"><span>Light</span></button>
+                <button class="btn btn-danger"><span>Danger</span></button>
+            </div>
+            <div class="flex-row gap-2 mt-2">
+                <button class="btn btn-sm"><span>Small</span></button>
+                <button class="btn"><span>Normal</span></button>
+                <button class="btn btn-lg"><span>Large</span></button>
+                <button class="btn btn-block" style="max-width:300px;"><span><i class="fas fa-rocket"></i> Block</span></button>
+            </div>
+            <div class="flex-row gap-2 mt-2">
+                <button class="btn btn-primary"><span><i class="fas fa-plus"></i> Add</span></button>
+                <button class="btn"><span><i class="fas fa-edit"></i> Edit</span></button>
+                <button class="btn btn-danger"><span><i class="fas fa-trash"></i> Delete</span></button>
+            </div>
+        </section>
+
+        <!-- ===== TABLES ===== -->
+        <section class="section-block" id="tables">
+            <h2 class="section-title-sm">Tables</h2>
+            <p class="section-desc">Styled data table with status badges and hover states.</p>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Project</th>
+                            <th>Status</th>
+                            <th>Team</th>
+                            <th>Last Update</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>01</td>
+                            <td>Quantum Core</td>
+                            <td><span class="table-status active">Active</span></td>
+                            <td>R&amp;D</td>
+                            <td>2 min ago</td>
+                        </tr>
+                        <tr>
+                            <td>02</td>
+                            <td>Nexus Cloud</td>
+                            <td><span class="table-status pending">Pending</span></td>
+                            <td>Infra</td>
+                            <td>1 hour ago</td>
+                        </tr>
+                        <tr>
+                            <td>03</td>
+                            <td>AI Forge</td>
+                            <td><span class="table-status active">Active</span></td>
+                            <td>ML Ops</td>
+                            <td>3 hours ago</td>
+                        </tr>
+                        <tr>
+                            <td>04</td>
+                            <td>Legacy Migrator</td>
+                            <td><span class="table-status inactive">Inactive</span></td>
+                            <td>Core</td>
+                            <td>2 days ago</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ===== CHARTS ===== -->
+        <section class="section-block" id="charts">
+            <h2 class="section-title-sm">Graphs (Chart.js)</h2>
+            <p class="section-desc">Bar chart &amp; line chart — fully interactive.</p>
+            <div class="grid-2">
+                <div class="chart-container">
+                    <canvas id="barChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <canvas id="lineChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== FORMS ===== -->
+        <section class="section-block" id="forms">
+            <h2 class="section-title-sm">Forms</h2>
+            <p class="section-desc">Inputs, textarea, select, checkboxes, toggles.</p>
+            <div class="grid-2">
+                <div>
+                    <div class="form-group">
+                        <label>Full name</label>
+                        <input type="text" class="form-control" placeholder="e.g. Jane Doe" />
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" class="form-control" placeholder="jane@nexus.io" />
+                    </div>
+                    <div class="form-group">
+                        <label>Department</label>
+                        <select class="form-control">
+                            <option>Engineering</option>
+                            <option>Product</option>
+                            <option>Design</option>
+                            <option>Operations</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Message</label>
+                        <textarea rows="3" class="form-control" placeholder="Write something..."></textarea>
+                    </div>
+                </div>
+                <div>
+                    <div class="form-group">
+                        <label>Options</label>
+                        <label class="form-check">
+                            <input type="checkbox" checked /> Enable notifications
+                        </label>
+                        <label class="form-check">
+                            <input type="checkbox" /> Dark mode
+                        </label>
+                        <label class="form-check">
+                            <input type="radio" name="radio" checked /> Option A
+                        </label>
+                        <label class="form-check">
+                            <input type="radio" name="radio" /> Option B
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>Toggle switch</label>
+                        <div class="toggle-wrap">
+                            <div class="toggle active" id="toggleDemo" onclick="this.classList.toggle('active')">
+                                <div class="knob"></div>
+                            </div>
+                            <span style="color:var(--text-secondary);font-size:0.9rem;">Click to toggle</span>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <button class="btn btn-primary btn-block"><span>Submit</span></button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== CARDS + ALERTS + BREADCRUMBS + PAGINATION ===== -->
+        <section class="section-block" id="components">
+            <h2 class="section-title-sm">Cards, Alerts, Breadcrumbs &amp; Pagination</h2>
+            <p class="section-desc">Ready‑to‑use UI components.</p>
+
+            <!-- Cards -->
+            <div class="card-grid">
+                <div class="card">
+                    <div class="icon"><i class="fas fa-cube"></i></div>
+                    <h4>Modular</h4>
+                    <p>Build with reusable blocks. Copy, paste, customize.</p>
+                </div>
+                <div class="card">
+                    <div class="icon"><i class="fas fa-palette"></i></div>
+                    <h4>Dark &amp; Neon</h4>
+                    <p>Tron‑inspired palette with fluorescent green accents.</p>
+                </div>
+                <div class="card">
+                    <div class="icon"><i class="fas fa-mobile-alt"></i></div>
+                    <h4>Responsive</h4>
+                    <p>Works on all screen sizes — from mobile to 4K.</p>
+                </div>
+            </div>
+
+            <!-- Alerts -->
+            <div style="margin:24px 0;">
+                <div class="alert alert-success"><i class="fas fa-check-circle"></i> Success! Your deployment was completed.</div>
+                <div class="alert alert-warning"><i class="fas fa-exclamation-triangle"></i> Warning: Storage is at 85% capacity.</div>
+                <div class="alert alert-error"><i class="fas fa-times-circle"></i> Error: Failed to connect to the database.</div>
+                <div class="alert alert-info"><i class="fas fa-info-circle"></i> Info: New update available (v2.4.1).</div>
+            </div>
+
+            <!-- Breadcrumbs -->
+            <ul class="breadcrumb">
+                <li><a href="#">Home</a></li>
+                <li><a href="#">Products</a></li>
+                <li><a href="#">Quantum Core</a></li>
+                <li class="current">Specs</li>
+            </ul>
+
+            <!-- Pagination -->
+            <div class="pagination">
+                <button>Prev</button>
+                <button class="active">1</button>
+                <button>2</button>
+                <button>3</button>
+                <button>4</button>
+                <button>Next</button>
+            </div>
+        </section>
+
+        <!-- ===== TABS + ACCORDION + PROGRESS ===== -->
+        <section class="section-block">
+            <h2 class="section-title-sm">Tabs, Accordion &amp; Progress</h2>
+            <p class="section-desc">Interactive components with smooth transitions.</p>
+
+            <!-- Tabs -->
+            <div class="tabs" id="tabContainer">
+                <button class="tab-btn active" data-tab="tab1">Overview</button>
+                <button class="tab-btn" data-tab="tab2">Details</button>
+                <button class="tab-btn" data-tab="tab3">Metrics</button>
+            </div>
+            <div class="tab-panel active" id="tab1">
+                <p><strong>Overview</strong> — This is the main dashboard. All key metrics are displayed here.</p>
+                <p style="color:var(--text-secondary);">You can switch between tabs to see different views.</p>
+            </div>
+            <div class="tab-panel" id="tab2">
+                <p><strong>Details</strong> — Dive deeper into system logs and configuration.</p>
+                <ul style="color:var(--text-secondary);margin-left:20px;">
+                    <li>Version: 2.4.1</li>
+                    <li>Uptime: 99.97%</li>
+                    <li>Region: eu-west-1</li>
+                </ul>
+            </div>
+            <div class="tab-panel" id="tab3">
+                <p><strong>Metrics</strong> — Real‑time performance data.</p>
+                <div class="progress-wrap">
+                    <div class="progress-label"><span>CPU Usage</span><span>72%</span></div>
+                    <div class="progress-bar"><div class="fill" style="width:72%;"></div></div>
+                </div>
+                <div class="progress-wrap">
+                    <div class="progress-label"><span>Memory</span><span>45%</span></div>
+                    <div class="progress-bar"><div class="fill" style="width:45%;"></div></div>
+                </div>
+                <div class="progress-wrap">
+                    <div class="progress-label"><span>Storage</span><span>88%</span></div>
+                    <div class="progress-bar"><div class="fill" style="width:88%;"></div></div>
+                </div>
+            </div>
+
+            <!-- Accordion -->
+            <div style="margin-top:32px;">
+                <div class="accordion-item">
+                    <div class="accordion-header open" onclick="toggleAccordion(this)">
+                        <span>🚀 What is NexusCore?</span>
+                        <span class="arrow">▼</span>
+                    </div>
+                    <div class="accordion-body open">
+                        NexusCore is a next‑gen technology platform combining quantum‑inspired computing, zero‑trust security, and AI‑driven automation.
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <div class="accordion-header" onclick="toggleAccordion(this)">
+                        <span>🔒 How secure is it?</span>
+                        <span class="arrow">▼</span>
+                    </div>
+                    <div class="accordion-body">
+                        We implement end‑to‑end encryption, identity‑based access, and continuous compliance monitoring to meet the highest enterprise standards.
+                    </div>
+                </div>
+                <div class="accordion-item">
+                    <div class="accordion-header" onclick="toggleAccordion(this)">
+                        <span>📦 Can I self‑host?</span>
+                        <span class="arrow">▼</span>
+                    </div>
+                    <div class="accordion-body">
+                        Yes! NexusCore offers both cloud‑managed and on‑premise deployment options. Contact our sales team for a custom quote.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== FOOTER (sample) ===== -->
+        <footer style="padding:32px 0 24px;border-top:1px solid var(--border-green);margin-top:16px;">
+            <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px;">
+                <p style="color:var(--text-secondary);font-size:0.85rem;">
+                    <span class="glow-text">✦</span> UI Kit — Free to use for any project.
+                </p>
+                <div style="display:flex;gap:16px;">
+                    <a href="#" style="color:var(--text-secondary);"><i class="fab fa-github"></i></a>
+                    <a href="#" style="color:var(--text-secondary);"><i class="fab fa-twitter"></i></a>
+                    <a href="#" style="color:var(--text-secondary);"><i class="fab fa-linkedin-in"></i></a>
+                </div>
+            </div>
+        </footer>
+
+    </div>
+
+    <script>
+        // ----- TABS -----
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const panels = {
+            tab1: document.getElementById('tab1'),
+            tab2: document.getElementById('tab2'),
+            tab3: document.getElementById('tab3')
+        };
+
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', function() {
+                tabBtns.forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                const target = this.dataset.tab;
+                Object.keys(panels).forEach(key => {
+                    panels[key].classList.toggle('active', key === target);
+                });
+            });
+        });
+
+        // ----- ACCORDION -----
+        function toggleAccordion(header) {
+            const body = header.nextElementSibling;
+            const isOpen = body.classList.contains('open');
+            // close siblings (optional)
+            const parent = header.closest('.accordion-item').parentElement;
+            parent.querySelectorAll('.accordion-body').forEach(b => {
+                if (b !== body) {
+                    b.classList.remove('open');
+                    b.previousElementSibling.classList.remove('open');
+                }
+            });
+            body.classList.toggle('open');
+            header.classList.toggle('open');
+        }
+
+        // ----- CHARTS -----
+        document.addEventListener('DOMContentLoaded', function() {
+            // Bar chart
+            const ctxBar = document.getElementById('barChart').getContext('2d');
+            new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                    datasets: [{
+                        label: 'Revenue (k$)',
+                        data: [42, 58, 65, 80, 92, 110],
+                        backgroundColor: 'rgba(0, 255, 65, 0.3)',
+                        borderColor: '#00ff41',
+                        borderWidth: 2,
+                        borderRadius: 4,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#e0e0e0' } }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#aaaaaa' }, grid: { color: 'rgba(255,255,255,0.04)' } },
+                        y: { ticks: { color: '#aaaaaa' }, grid: { color: 'rgba(255,255,255,0.04)' } }
+                    }
+                }
+            });
+
+            // Line chart
+            const ctxLine = document.getElementById('lineChart').getContext('2d');
+            new Chart(ctxLine, {
+                type: 'line',
+                data: {
+                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                    datasets: [{
+                        label: 'Active Users',
+                        data: [120, 190, 230, 280, 340, 400, 380],
+                        borderColor: '#00ff41',
+                        backgroundColor: 'rgba(0, 255, 65, 0.05)',
+                        tension: 0.3,
+                        fill: true,
+                        pointBackgroundColor: '#00ff41',
+                        pointBorderColor: '#0a0a0a',
+                        pointBorderWidth: 2,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#e0e0e0' } }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#aaaaaa' }, grid: { color: 'rgba(255,255,255,0.04)' } },
+                        y: { ticks: { color: '#aaaaaa' }, grid: { color: 'rgba(255,255,255,0.04)' } }
+                    }
+                }
+            });
+        });
+
+        // ----- AUTO INIT TOGGLE (already active by default) -----
+        console.log('🧩 UI Kit loaded — copy any component to build your pages.');
+    </script>
+
+</body>
+</html>
